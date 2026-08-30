@@ -19,6 +19,7 @@ import { MessageRow } from "./MessageRow";
 import { useChatDragDrop } from "./useChatDragDrop";
 import { useFileWriteDetection } from "./useFileWriteDetection";
 import { useProviderStore } from "../../stores/provider-store";
+import { isStandaloneImageModel } from "../../services/image-model";
 
 export interface ChatViewHandle {
   scrollToBottom: () => void;
@@ -77,11 +78,8 @@ export function ChatView({
     if (isGroup || participants.length !== 1) return undefined;
     return models.find((candidate) => candidate.id === participants[0].modelId);
   }, [isGroup, models, participants]);
-  const imageOnly =
-    !!activeModel &&
-    activeModel.outputModalities.includes("image") &&
-    !activeModel.outputModalities.includes("text");
-  const usesImageApi = imageOnly && !!activeModel?.imageGenerationApi;
+  const usesImageApi = !isGroup && isStandaloneImageModel(activeModel);
+  const imageOnly = usesImageApi;
 
   const { scrollRef, contentRef, scrollToBottom, isAtBottom } = useStickToBottom({
     resize: "instant",

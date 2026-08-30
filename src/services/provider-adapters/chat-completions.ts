@@ -4,7 +4,8 @@ import { appFetch } from "../../lib/http";
 
 export class ChatCompletionsAdapter implements ProviderAdapter {
   async probeCapabilities(params: ProbeParams): Promise<ProbeResult> {
-    const caps: ProbeResult = { vision: false, toolCall: false, reasoning: false, streaming: true };
+    const capabilities: ProbeResult["capabilities"] = {};
+    const warnings: string[] = [];
 
     // Probe vision
     try {
@@ -31,9 +32,12 @@ export class ChatCompletionsAdapter implements ProviderAdapter {
           ],
         }),
       });
-      caps.vision = res.ok;
-    } catch {
-      /* ignore */
+      if (res.ok) capabilities.vision = true;
+      else warnings.push(`Vision probe returned HTTP ${res.status}`);
+    } catch (error) {
+      warnings.push(
+        `Vision probe failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     // Probe tool call
@@ -58,11 +62,12 @@ export class ChatCompletionsAdapter implements ProviderAdapter {
           ],
         }),
       });
-      caps.toolCall = res.ok;
-    } catch {
-      /* ignore */
+      if (res.ok) capabilities.toolCall = true;
+      else warnings.push(`Tool probe returned HTTP ${res.status}`);
+    } catch (error) {
+      warnings.push(`Tool probe failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    return caps;
+    return { capabilities, warnings };
   }
 }

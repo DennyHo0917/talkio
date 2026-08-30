@@ -94,6 +94,7 @@ describe("direct chat image generation", () => {
     expect(assistantMessage).toMatchObject({
       role: "assistant",
       senderModelId: "image-model-1",
+      participantId: "participant-1",
       status: MessageStatus.STREAMING,
     });
     expect(Date.parse(assistantMessage.createdAt)).toBeGreaterThan(

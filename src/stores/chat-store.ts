@@ -231,7 +231,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId,
       imageModel.id,
       imageModel.displayName,
-      "",
+      conversation.participants[0].id,
       null,
       branchId,
       new Date(Date.parse(userMessage.createdAt) + 1).toISOString(),

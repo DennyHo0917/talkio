@@ -88,6 +88,8 @@ export interface Model {
   displayName: string;
   avatar: string | null;
   capabilities: ModelCapabilities;
+  /** Capability fields confirmed by live probes; overrides catalog values field by field. */
+  probedCapabilities?: Partial<ModelCapabilities>;
   inputModalities: ModelInputModality[];
   outputModalities: ModelOutputModality[];
   /** Independent image generation API exposed through an AI SDK ImageModel. */

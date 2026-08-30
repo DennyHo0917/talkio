@@ -1,4 +1,11 @@
-import type { ImageGenerationApi, ModelOutputModality, Provider } from "../types";
+import type { ImageGenerationApi, Model, ModelOutputModality, Provider } from "../types";
+
+/** An explicit ImageModel API means conversation input is an image prompt. */
+export function isStandaloneImageModel(
+  model: Pick<Model, "imageGenerationApi" | "outputModalities"> | null | undefined,
+): boolean {
+  return !!model?.imageGenerationApi && model.outputModalities.includes("image");
+}
 
 export function inferImageGenerationApi(
   provider: Provider,

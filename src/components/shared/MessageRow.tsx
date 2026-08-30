@@ -36,6 +36,7 @@ import { MessageStatus } from "../../types";
 import type { WrittenFile, WorkspaceFileStatus } from "../../services/file-writer";
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { useProviderStore } from "../../stores/provider-store";
+import { isStandaloneImageModel } from "../../services/image-model";
 import { useIdentityStore } from "../../stores/identity-store";
 import { getParticipantLabel, getParticipantLabelParts } from "../../stores/chat-message-builder";
 import { useImageUrls } from "../../hooks/useImageUrls";
@@ -370,10 +371,7 @@ export const MessageRow = memo(function MessageRow({
       toolCall.name === "generate_image" &&
       !message.toolResults?.some((result) => result.toolCallId === toolCall.id),
   );
-  const standaloneImageModel =
-    !!senderModel?.imageGenerationApi &&
-    senderModel.outputModalities.includes("image") &&
-    !senderModel.outputModalities.includes("text");
+  const standaloneImageModel = isStandaloneImageModel(senderModel);
   const directImagePending = isStreaming && standaloneImageModel;
   const directImageCancelled =
     message.status === MessageStatus.PAUSED && standaloneImageModel && !hasGeneratedImages;

@@ -112,19 +112,31 @@ export function createToolExecutor(
     modelName: p.modelId,
     availableTools,
   };
+  let executionTail: Promise<void> = Promise.resolve();
 
-  return async (name, input) => {
-    const result = await executeOneTool(
-      name,
-      input,
-      p.builtInEnabledByName,
-      p.identity,
-      p.allowedBuiltInToolNames,
-      p.allowedServerIds,
-      p.toolContext,
-      approvalContext,
+  return (name, input) => {
+    const execute = async () => {
+      if (p.toolContext?.signal?.aborted) {
+        throw new DOMException("Tool execution aborted", "AbortError");
+      }
+      const result = await executeOneTool(
+        name,
+        input,
+        p.builtInEnabledByName,
+        p.identity,
+        p.allowedBuiltInToolNames,
+        p.allowedServerIds,
+        p.toolContext,
+        approvalContext,
+      );
+      if (result.images?.length && p.onImages) p.onImages(result.images);
+      return result.content;
+    };
+    const pending = executionTail.then(execute);
+    executionTail = pending.then(
+      () => undefined,
+      () => undefined,
     );
-    if (result.images?.length && p.onImages) p.onImages(result.images);
-    return result.content;
+    return pending;
   };
 }

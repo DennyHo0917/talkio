@@ -47,16 +47,28 @@ export function extractApiKey(headers: Record<string, string>): string | undefin
   );
 }
 
-/** Drop the secret-bearing auth headers the SDK sets itself; keep custom headers. */
+/**
+ * Keep caller-provided headers intact. Provider SDK defaults are merged before
+ * these headers, so explicit custom auth (Azure api-key, Basic auth, gateways)
+ * remains authoritative.
+ */
 function passthroughHeaders(headers: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    const lk = k.toLowerCase();
-    if (lk === "authorization" || lk === "x-api-key" || lk === "x-goog-api-key" || lk === "api-key")
-      continue;
-    out[k] = v;
-  }
-  return out;
+  return { ...headers };
+}
+
+function splitBaseUrl(baseUrl: string): {
+  baseURL: string;
+  queryParams?: Record<string, string>;
+} {
+  if (!baseUrl.includes("?")) return { baseURL: baseUrl.replace(/\/$/, "") };
+  const url = new URL(baseUrl);
+  const queryParams = Object.fromEntries(url.searchParams.entries());
+  url.search = "";
+  url.hash = "";
+  return {
+    baseURL: url.toString().replace(/\/$/, ""),
+    queryParams: Object.keys(queryParams).length > 0 ? queryParams : undefined,
+  };
 }
 
 /** Minimal shape needed to resolve a model — shared by chat, compression, probing. */
@@ -87,10 +99,15 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
       // OpenAI-compatible covers real OpenAI + third-party gateways and, unlike
       // @ai-sdk/openai, surfaces `delta.reasoning` (build4ai / OpenRouter / etc.)
       // so reasoning models show their thinking.
+      const { baseURL, queryParams } = splitBaseUrl(opts.baseUrl);
+      const usesHeaderApiKey = Object.keys(opts.headers).some(
+        (name) => name.toLowerCase() === "api-key" || name.toLowerCase() === "x-api-key",
+      );
       return createOpenAICompatible({
         name: "openai-compatible",
-        baseURL: opts.baseUrl,
-        apiKey,
+        baseURL,
+        queryParams,
+        apiKey: usesHeaderApiKey ? undefined : apiKey,
         headers,
         fetch,
         includeUsage: true,
@@ -235,6 +252,7 @@ export class AISdkRuntime implements ParticipantRuntime {
             // call→execute→feed-back loop up to N steps.
             stopWhen: request.executeTool ? stepCountIs(request.maxToolRounds ?? 8) : undefined,
             reasoning: request.reasoningEffort as never,
+            temperature: request.temperature,
             providerOptions: providerOptions as never,
             abortSignal: controller.signal,
           });

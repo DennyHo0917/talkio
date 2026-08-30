@@ -94,6 +94,39 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
     expect(events[events.length - 1].type).toBe("run-completed");
   });
 
+  it("preserves Azure api-key auth and appends api-version after the resource path", async () => {
+    mockFetch.mockResolvedValue(openaiSseResponse());
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+    await collect(
+      runtime.run(
+        makeRequest({
+          baseUrl:
+            "https://resource.openai.azure.com/openai/deployments/prod%20deployment?api-version=2024-10-21",
+          headers: { "api-key": "azure-secret" },
+        }),
+      ),
+    );
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toBe(
+      "https://resource.openai.azure.com/openai/deployments/prod%20deployment/chat/completions?api-version=2024-10-21",
+    );
+    expect((init as RequestInit).headers).toMatchObject({ "api-key": "azure-secret" });
+    expect((init as RequestInit).headers).not.toHaveProperty("authorization");
+  });
+
+  it("sends the selected identity temperature", async () => {
+    mockFetch.mockResolvedValue(openaiSseResponse());
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+    await collect(runtime.run(makeRequest({ temperature: 0.35 })));
+
+    expect(JSON.parse(String((mockFetch.mock.calls[0][1] as RequestInit).body))).toMatchObject({
+      temperature: 0.35,
+    });
+  });
+
   it("normalizes an HTTP 401 into run-failed auth", async () => {
     mockFetch.mockResolvedValue(
       new Response(JSON.stringify({ error: { message: "Invalid API key" } }), { status: 401 }),

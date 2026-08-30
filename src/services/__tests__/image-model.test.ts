@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Provider } from "../../types";
-import { inferImageGenerationApi } from "../image-model";
+import { inferImageGenerationApi, isStandaloneImageModel } from "../image-model";
 
 function provider(overrides: Partial<Provider> = {}): Provider {
   return {
@@ -48,5 +48,25 @@ describe("inferImageGenerationApi", () => {
         "image",
       ]),
     ).toBeUndefined();
+  });
+});
+
+describe("isStandaloneImageModel", () => {
+  it("uses the explicit image API even when the catalog also lists text output", () => {
+    expect(
+      isStandaloneImageModel({
+        imageGenerationApi: "openai",
+        outputModalities: ["text", "image"],
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps chat-native image output on the language-model path", () => {
+    expect(
+      isStandaloneImageModel({
+        imageGenerationApi: undefined,
+        outputModalities: ["text", "image"],
+      }),
+    ).toBe(false);
   });
 });

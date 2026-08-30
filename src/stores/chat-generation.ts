@@ -295,6 +295,7 @@ export async function generateForParticipant(
         messages: apiMessages,
         identity,
         reasoningEffort,
+        temperature: identity?.params?.temperature,
         toolDefs,
         executeTool,
         signal: ctx.abortController.signal,

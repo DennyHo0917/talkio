@@ -6,6 +6,7 @@ import { useProviderStore } from "../../stores/provider-store";
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { groupModelsByProvider } from "../../lib/model-utils";
 import type { Model } from "../../types";
+import { isStandaloneImageModel } from "../../services/image-model";
 
 interface ModelPickerProps {
   open: boolean;
@@ -116,9 +117,7 @@ export function ModelPicker({
                 </div>
                 {section.data.map((model, idx) => {
                   const { color: mColor, initials: mInitials } = getAvatarProps(model.displayName);
-                  const imageOnly =
-                    model.outputModalities.includes("image") &&
-                    !model.outputModalities.includes("text");
+                  const imageOnly = isStandaloneImageModel(model);
                   const isSelected = multiSelect
                     ? selectedIds.has(model.id)
                     : model.id === selectedModelId;

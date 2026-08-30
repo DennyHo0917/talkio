@@ -28,6 +28,8 @@ export interface ParticipantRequest {
   /** Max steps for the SDK-managed tool loop (default 8). */
   maxToolRounds?: number;
   reasoningEffort?: string;
+  /** Sampling temperature configured by the selected identity. */
+  temperature?: number;
   identity?: unknown;
   signal: AbortSignal;
 }

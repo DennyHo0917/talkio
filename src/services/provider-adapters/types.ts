@@ -1,3 +1,5 @@
+import type { ModelCapabilities } from "../../types";
+
 /** Parameters for probing model capabilities */
 export interface ProbeParams {
   baseUrl: string;
@@ -5,12 +7,10 @@ export interface ProbeParams {
   modelId: string;
 }
 
-/** Model capabilities result */
+/** Only positively confirmed capabilities are returned; failures stay diagnostic. */
 export interface ProbeResult {
-  vision: boolean;
-  toolCall: boolean;
-  reasoning: boolean;
-  streaming: boolean;
+  capabilities: Partial<ModelCapabilities>;
+  warnings: string[];
 }
 
 /**

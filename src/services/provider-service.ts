@@ -1,4 +1,5 @@
 import type { Model, ModelCapabilities, Provider } from "../types";
+import type { ProbeResult } from "./provider-adapters";
 import { appFetch } from "../lib/http";
 import { buildProviderHeaders } from "./provider-headers";
 import { getAdapter } from "./provider-adapters";
@@ -132,7 +133,7 @@ export async function testProviderConnection(provider: Provider): Promise<boolea
 export async function probeProviderModelCapabilities(
   provider: Provider,
   modelId: string,
-): Promise<ModelCapabilities> {
+): Promise<ProbeResult> {
   const baseUrl = resolveAdapterBaseUrl(provider, modelId);
   const headers = buildProviderHeaders(provider, { "Content-Type": "application/json" });
   const adapter = getAdapter(provider.apiFormat);

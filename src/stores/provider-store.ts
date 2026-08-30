@@ -60,7 +60,7 @@ interface ProviderState {
   loadFromStorage: () => void;
   fetchModels: (providerId: string) => Promise<Model[]>;
   testConnection: (providerId: string) => Promise<boolean>;
-  probeModelCapabilities: (modelId: string) => Promise<void>;
+  probeModelCapabilities: (modelId: string) => Promise<{ warnings: string[] }>;
   checkModelHealth: (modelId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
@@ -189,6 +189,7 @@ function normalizeModel(m: any): Model {
     displayName: String(m.displayName ?? m.modelId),
     avatar: m.avatar ?? null,
     capabilities: caps,
+    probedCapabilities: normalizeProbedCapabilities(m.probedCapabilities),
     inputModalities,
     outputModalities,
     imageGenerationApi: isImageGenerationApi(m.imageGenerationApi)
@@ -205,6 +206,16 @@ function normalizeModel(m: any): Model {
     metadataProviderId: typeof m.metadataProviderId === "string" ? m.metadataProviderId : undefined,
     enabled: m.enabled !== false,
   } as Model;
+}
+
+function normalizeProbedCapabilities(value: unknown): Partial<ModelCapabilities> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result: Partial<ModelCapabilities> = {};
+  for (const key of ["vision", "toolCall", "reasoning", "streaming"] as const) {
+    const field = (value as Record<string, unknown>)[key];
+    if (typeof field === "boolean") result[key] = field;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function isInputModality(value: unknown): value is ModelInputModality {
@@ -268,14 +279,17 @@ function applyCatalogMetadata(
     inputModalities: descriptor.inputModalities,
     outputModalities: descriptor.outputModalities,
     imageGenerationApi: inferImageGenerationApi(provider, descriptor.outputModalities),
-    capabilities: descriptor.capabilities
-      ? {
-          vision: descriptor.inputModalities.includes("image"),
-          toolCall: descriptor.capabilities.tools === true,
-          reasoning: descriptor.capabilities.reasoning === true,
-          streaming: descriptor.capabilities.streaming ?? model.capabilities.streaming,
-        }
-      : model.capabilities,
+    capabilities: {
+      ...(descriptor.capabilities
+        ? {
+            vision: descriptor.inputModalities.includes("image"),
+            toolCall: descriptor.capabilities.tools === true,
+            reasoning: descriptor.capabilities.reasoning === true,
+            streaming: descriptor.capabilities.streaming ?? model.capabilities.streaming,
+          }
+        : model.capabilities),
+      ...model.probedCapabilities,
+    },
     capabilitiesVerified: descriptor.capabilities ? true : model.capabilitiesVerified,
     metadataSource: descriptor.metadataSource,
     metadataMatch: descriptor.metadataMatch,
@@ -472,6 +486,7 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       if (!m) return;
       get().updateModel(id, {
         capabilities: { ...m.capabilities, ...caps },
+        probedCapabilities: { ...m.probedCapabilities, ...caps },
         capabilitiesVerified: true,
       });
     },
@@ -578,9 +593,15 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       const provider = get().getProviderById(model.providerId);
       if (!provider) throw new Error("Provider not found");
 
-      const caps = await probeProviderModelCapabilities(provider, model.modelId);
-      get().updateModelCapabilities(modelId, caps);
-      get().updateModel(modelId, { metadataSource: "probe" });
+      const result = await probeProviderModelCapabilities(provider, model.modelId);
+      if (Object.keys(result.capabilities).length === 0) {
+        throw new Error(result.warnings.join("; ") || "Capability probe returned no results");
+      }
+      get().updateModelCapabilities(modelId, result.capabilities);
+      if (model.metadataSource === "default" || !model.metadataSource) {
+        get().updateModel(modelId, { metadataSource: "probe" });
+      }
+      return { warnings: result.warnings };
     },
 
     checkModelHealth: async (modelId: string) => {

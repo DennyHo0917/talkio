@@ -412,7 +412,10 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                     onClick={async () => {
                       setProbingModelIds((prev) => new Set(prev).add(m.id));
                       try {
-                        await probeModelCapabilities(m.id);
+                        const result = await probeModelCapabilities(m.id);
+                        if (result.warnings.length > 0) {
+                          toast.warning(result.warnings.join("\n"));
+                        }
                       } catch (error) {
                         toast.error(
                           error instanceof Error ? error.message : t("providerEdit.probeFailed"),

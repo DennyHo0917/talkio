@@ -103,4 +103,28 @@ describe("provider disable / model selection", () => {
         .map((model) => model.id),
     ).toEqual(["m1", "m4"]);
   });
+
+  it("keeps field-level probe overrides when catalog metadata is reapplied", async () => {
+    localStorage.setItem(
+      "talkio:providers",
+      JSON.stringify([makeProvider({ profileId: "openai" })]),
+    );
+    localStorage.setItem(
+      "talkio:models",
+      JSON.stringify([
+        makeModel({
+          capabilities: { vision: false, toolCall: false, reasoning: false, streaming: true },
+          probedCapabilities: { toolCall: false },
+        }),
+      ]),
+    );
+
+    const store = await loadStore();
+    const loaded = store.getState().getModelById("m1");
+
+    expect(loaded?.metadataSource).toBe("models.dev");
+    expect(loaded?.capabilities.vision).toBe(true);
+    expect(loaded?.capabilities.toolCall).toBe(false);
+    expect(loaded?.probedCapabilities).toEqual({ toolCall: false });
+  });
 });
