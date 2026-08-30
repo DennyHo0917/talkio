@@ -330,6 +330,7 @@
     "tools": "工具",
     "reasoning": "推理",
     "probe": "探测",
+    "probeFailed": "模型能力探测失败",
     "type": "类型",
     "enabled": "启用",
     "customHeaders": "自定义请求头",
@@ -362,7 +363,17 @@
     "reasoningEffort_low": "低",
     "reasoningEffort_medium": "中",
     "reasoningEffort_high": "高",
-    "reasoningEffort_xhigh": "最高"
+    "reasoningEffort_xhigh": "最高",
+    "reasoningEffort_max": "极限",
+    "contextWindow": "上下文 {{value}}",
+    "maxOutputTokens": "最大输出 {{value}}",
+    "reasoningLevels": "推理档位 {{value}}",
+    "reasoningBudget": "预算 {{value}} tokens",
+    "metadataSource_manual": "手动配置",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "供应商 API",
+    "metadataSource_probe": "实时探测",
+    "metadataSource_default": "默认值"
   },
   "providers": {
     "deleteProvider": "删除供应商",

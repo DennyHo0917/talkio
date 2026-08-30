@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import {
   IoRefreshOutline,
@@ -15,12 +16,45 @@ import {
 } from "../../icons";
 import { useProviderStore } from "../../stores/provider-store";
 import { sortEnabledFirst, isSameOrder } from "../../lib/model-utils";
-import type { Model } from "../../types";
+import { reasoningEffortLabel, type Model } from "../../types";
 
 interface ProviderModelListProps {
   providerId: string;
   pulling: boolean;
   onRefresh: () => void;
+}
+
+function formatTokenLimit(value: number): string {
+  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`;
+  if (value >= 1_000) return `${Number((value / 1_000).toFixed(1))}K`;
+  return String(value);
+}
+
+function reasoningSummary(model: Model, t: TFunction): string | undefined {
+  const effort = model.reasoningOptions?.find((option) => option.type === "effort");
+  if (effort?.type === "effort") {
+    const levels = effort.values
+      .filter((level) => level !== "default")
+      .map((level) => reasoningEffortLabel(level));
+    if (levels.length > 0) return levels.join("/");
+  }
+
+  const budget = model.reasoningOptions?.find((option) => option.type === "budget_tokens");
+  if (budget?.type === "budget_tokens") {
+    const min =
+      budget.min !== undefined && budget.min >= 0 ? formatTokenLimit(budget.min) : undefined;
+    const max = budget.max !== undefined ? formatTokenLimit(budget.max) : undefined;
+    const value = min && max ? `${min}-${max}` : max ? `≤${max}` : min ? `≥${min}` : undefined;
+    return value ? t("providerEdit.reasoningBudget", { value }) : undefined;
+  }
+
+  return undefined;
+}
+
+function metadataSourceLabel(model: Model, t: TFunction): string | undefined {
+  return model.metadataSource
+    ? t(`providerEdit.metadataSource_${model.metadataSource.replace(".", "_")}`)
+    : undefined;
 }
 
 export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderModelListProps) {
@@ -373,8 +407,10 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                     setProbingModelIds((prev) => new Set(prev).add(m.id));
                     try {
                       await probeModelCapabilities(m.id);
-                    } catch {
-                      /* ignore */
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : t("providerEdit.probeFailed"),
+                      );
                     } finally {
                       setProbingModelIds((prev) => {
                         const next = new Set(prev);
@@ -394,6 +430,26 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                   )}
                   {t("providerEdit.probe")}
                 </button>
+              </div>
+              <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                <span>
+                  {t("providerEdit.contextWindow", {
+                    value: formatTokenLimit(m.maxContextLength),
+                  })}
+                </span>
+                {m.maxOutputTokens !== undefined && (
+                  <span>
+                    {t("providerEdit.maxOutputTokens", {
+                      value: formatTokenLimit(m.maxOutputTokens),
+                    })}
+                  </span>
+                )}
+                {m.capabilities.reasoning && reasoningSummary(m, t) && (
+                  <span>
+                    {t("providerEdit.reasoningLevels", { value: reasoningSummary(m, t) })}
+                  </span>
+                )}
+                {metadataSourceLabel(m, t) && <span>{metadataSourceLabel(m, t)}</span>}
               </div>
             </motion.div>
           ))}

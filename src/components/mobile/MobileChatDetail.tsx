@@ -35,7 +35,11 @@ import { ModelPicker } from "../shared/ModelPicker";
 import { useChatStore } from "../../stores/chat-store";
 import { useChatPanelState } from "../../hooks/useChatPanelState";
 import type { Identity } from "../../types";
-import { nextReasoningEffort } from "../../types";
+import {
+  getSupportedReasoningEfforts,
+  nextReasoningEffort,
+  reasoningEffortLabel,
+} from "../../types";
 import { MessageStatus } from "../../types";
 import { exportConversationAsMarkdown, exportConversationAsPdf } from "../../services/export";
 import { exportConversationAsImages } from "../../services/export-image";
@@ -441,7 +445,10 @@ export function MobileChatDetail({
               updateParticipantReasoningEffort(
                 conversationId,
                 currentParticipant.id,
-                nextReasoningEffort(currentParticipant.reasoningEffort),
+                nextReasoningEffort(
+                  currentParticipant.reasoningEffort,
+                  getSupportedReasoningEfforts(model),
+                ),
               );
             }}
           >
@@ -455,7 +462,7 @@ export function MobileChatDetail({
               className={`text-[9px] font-medium ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
             >
               {currentParticipant.reasoningEffort
-                ? t(`providerEdit.reasoningEffort_${currentParticipant.reasoningEffort}`)
+                ? reasoningEffortLabel(currentParticipant.reasoningEffort)
                 : t("providerEdit.reasoningEffort")}
             </span>
           </button>
@@ -747,7 +754,10 @@ export function MobileChatDetail({
               updateParticipantReasoningEffort(
                 conversationId,
                 pid,
-                nextReasoningEffort(p.reasoningEffort),
+                nextReasoningEffort(
+                  p.reasoningEffort,
+                  getSupportedReasoningEfforts(getModelById(p.modelId)),
+                ),
               );
             }}
           />

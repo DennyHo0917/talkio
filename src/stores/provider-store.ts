@@ -3,7 +3,14 @@
  * Uses localStorage for persistence (replaces react-native-mmkv).
  */
 import { create } from "zustand";
-import type { Provider, Model, ModelCapabilities } from "../types";
+import type {
+  Provider,
+  Model,
+  ModelCapabilities,
+  ModelMetadataMatch,
+  ModelMetadataSource,
+  ReasoningOption,
+} from "../types";
 import { kvStore } from "../storage/kv-store";
 import { secretStore } from "../services/secret-store";
 import { generateId } from "../lib/id";
@@ -81,8 +88,66 @@ function normalizeModel(m: any): Model {
     capabilities: caps,
     capabilitiesVerified: !!m.capabilitiesVerified,
     maxContextLength: typeof m.maxContextLength === "number" ? m.maxContextLength : 128000,
+    maxOutputTokens: typeof m.maxOutputTokens === "number" ? m.maxOutputTokens : undefined,
+    reasoningOptions: Array.isArray(m.reasoningOptions)
+      ? (m.reasoningOptions as ReasoningOption[])
+      : undefined,
+    metadataSource: isMetadataSource(m.metadataSource) ? m.metadataSource : undefined,
+    metadataMatch: isMetadataMatch(m.metadataMatch) ? m.metadataMatch : undefined,
+    metadataProviderId: typeof m.metadataProviderId === "string" ? m.metadataProviderId : undefined,
     enabled: m.enabled !== false,
   } as Model;
+}
+
+function isMetadataSource(value: unknown): value is ModelMetadataSource {
+  return (
+    value === "manual" ||
+    value === "models.dev" ||
+    value === "provider" ||
+    value === "probe" ||
+    value === "default"
+  );
+}
+
+function isMetadataMatch(value: unknown): value is ModelMetadataMatch {
+  return value === "exact" || value === "normalized";
+}
+
+function applyCatalogMetadata(
+  model: Model,
+  provider: Provider,
+  providerContextLength?: number,
+): Model {
+  const descriptor = resolveModelDescriptor(provider.profileId ?? provider.id, model.modelId);
+  if (!descriptor) {
+    return providerContextLength
+      ? { ...model, maxContextLength: providerContextLength, metadataSource: "provider" }
+      : model;
+  }
+
+  const manual = descriptor.metadataSource === "manual";
+
+  return {
+    ...model,
+    displayName: descriptor.displayName || model.displayName,
+    maxContextLength: manual
+      ? (descriptor.contextWindow ?? providerContextLength ?? model.maxContextLength)
+      : (providerContextLength ?? descriptor.contextWindow ?? model.maxContextLength),
+    maxOutputTokens: descriptor.maxOutputTokens ?? model.maxOutputTokens,
+    reasoningOptions: descriptor.reasoningOptions ?? model.reasoningOptions,
+    capabilities: descriptor.capabilities
+      ? {
+          vision: descriptor.inputModalities.includes("image"),
+          toolCall: descriptor.capabilities.tools === true,
+          reasoning: descriptor.capabilities.reasoning === true,
+          streaming: descriptor.capabilities.streaming ?? model.capabilities.streaming,
+        }
+      : model.capabilities,
+    capabilitiesVerified: descriptor.capabilities ? true : model.capabilitiesVerified,
+    metadataSource: descriptor.metadataSource,
+    metadataMatch: descriptor.metadataMatch,
+    metadataProviderId: descriptor.metadataProviderId,
+  };
 }
 
 /**
@@ -101,10 +166,14 @@ async function hydrateProviderSecrets(providers: Provider[]): Promise<Provider[]
   }
   if (migrated) persistProviders(providers);
 
+  // Only read the OS credential store for enabled providers — disabled ones
+  // aren't usable, so warming their keys just triggers extra keychain prompts
+  // (especially painful on unsigned dev builds). Re-enabling warms on demand
+  // (see updateProvider).
   return Promise.all(
     providers.map(async (p) => ({
       ...p,
-      apiKey: (await secretStore.get(p.id)) ?? "",
+      apiKey: p.enabled === false ? "" : ((await secretStore.get(p.id)) ?? ""),
     })),
   );
 }
@@ -134,11 +203,11 @@ export const useProviderStore = create<ProviderState>((set, get) => {
     getModelsByProvider: (providerId) => get().models.filter((m) => m.providerId === providerId),
     getEnabledModels: () => {
       const enabledProviderIds = new Set(
-        get().providers.filter((p) => p.enabled !== false).map((p) => p.id),
+        get()
+          .providers.filter((p) => p.enabled !== false)
+          .map((p) => p.id),
       );
-      return get().models.filter(
-        (m) => m.enabled && enabledProviderIds.has(m.providerId),
-      );
+      return get().models.filter((m) => m.enabled && enabledProviderIds.has(m.providerId));
     },
 
     addProvider: async (provider) => {
@@ -154,13 +223,23 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       if (updates.apiKey !== undefined) {
         await secretStore.set(id, updates.apiKey ?? "");
       }
+      // Warm the key on (re)enable so chat works without a restart — startup
+      // hydration skips disabled providers.
+      let warmedKey: string | undefined;
+      if (updates.enabled === true && updates.apiKey === undefined) {
+        const existing = get().providers.find((p) => p.id === id);
+        if (existing && !existing.apiKey) warmedKey = (await secretStore.get(id)) ?? "";
+      }
       set((s) => {
-        const providers = s.providers.map((p) => (p.id === id ? { ...p, ...updates } : p));
+        const providers = s.providers.map((p) =>
+          p.id === id
+            ? { ...p, ...updates, ...(warmedKey !== undefined ? { apiKey: warmedKey } : {}) }
+            : p,
+        );
         persistProviders(providers);
         return { providers };
       });
     },
-
 
     deleteProvider: async (id) => {
       await secretStore.delete(id);
@@ -187,7 +266,7 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       );
       if (existing) return existing;
 
-      const model: Model = {
+      const baseModel: Model = {
         id: generateId(),
         providerId,
         modelId,
@@ -201,8 +280,12 @@ export const useProviderStore = create<ProviderState>((set, get) => {
         },
         capabilitiesVerified: false,
         maxContextLength: 128000,
+        metadataSource: "default",
         enabled: true,
       };
+
+      const provider = get().providers.find((item) => item.id === providerId);
+      const model = provider ? applyCatalogMetadata(baseModel, provider) : baseModel;
 
       get().addModel(model);
       return model;
@@ -255,8 +338,12 @@ export const useProviderStore = create<ProviderState>((set, get) => {
     loadFromStorage: () => {
       const providers = kvStore.getObject<Provider[]>(PROVIDERS_KEY) ?? [];
       const rawModels = kvStore.getObject<any[]>(MODELS_KEY) ?? [];
-      const models: Model[] = rawModels.map(normalizeModel);
+      const models: Model[] = rawModels.map(normalizeModel).map((model) => {
+        const provider = providers.find((item) => item.id === model.providerId);
+        return provider ? applyCatalogMetadata(model, provider) : model;
+      });
       set({ providers, models });
+      persistModels(models);
       void hydrateProviderSecrets(providers).then((hydrated) => {
         set({ providers: hydrated });
       });
@@ -279,26 +366,14 @@ export const useProviderStore = create<ProviderState>((set, get) => {
 
       const newModels: Model[] = modelList.map((payload) => {
         const existing = existingForProvider.find((model) => model.modelId === payload.id);
-        if (existing) return existing;
-        const descriptor = resolveModelDescriptor(provider.profileId ?? provider.id, payload.id);
         const model = createModelFromProviderPayload(
-          generateId(),
+          existing?.id ?? generateId(),
           providerId,
           payload.id,
-          undefined,
-          descriptor?.contextWindow ?? payload.context_length ?? 128000,
+          existing,
+          payload.context_length ?? 128000,
         );
-        if (descriptor?.displayName) model.displayName = descriptor.displayName;
-        if (descriptor?.capabilities) {
-          model.capabilities = {
-            vision: descriptor.inputModalities.includes("image"),
-            toolCall: descriptor.capabilities.tools === true,
-            reasoning: descriptor.capabilities.reasoning === true,
-            streaming: descriptor.capabilities.streaming !== false,
-          };
-          model.capabilitiesVerified = true;
-        }
-        return model;
+        return applyCatalogMetadata(model, provider, payload.context_length);
       });
 
       const allModels = [...existingOther, ...newModels];
@@ -323,7 +398,6 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       }
     },
 
-
     probeModelCapabilities: async (modelId: string) => {
       const model = get().getModelById(modelId);
       if (!model) throw new Error("Model not found");
@@ -332,6 +406,7 @@ export const useProviderStore = create<ProviderState>((set, get) => {
 
       const caps = await probeProviderModelCapabilities(provider, model.modelId);
       get().updateModelCapabilities(modelId, caps);
+      get().updateModel(modelId, { metadataSource: "probe" });
     },
 
     checkModelHealth: async (modelId: string) => {

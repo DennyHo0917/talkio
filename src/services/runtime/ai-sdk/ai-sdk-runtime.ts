@@ -1,13 +1,15 @@
 /**
- * AISdkRuntime — P3 PoC: a ParticipantRuntime built on the Vercel AI SDK.
+ * AISdkRuntime — the production ParticipantRuntime, built on the Vercel AI SDK.
  *
- * Validates whether the AI SDK meaningfully reduces maintenance vs the
- * hand-rolled adapters (SSE parsing, delta normalization, error handling).
- * This is an alternative runtime, not a replacement: the chat-generation
- * path keeps using the legacy adapters until the PoC conclusion is drawn.
+ * Replaces the hand-rolled provider adapters + SSE parsers: message shaping,
+ * provider protocol, streaming, tool-call and reasoning normalization are all
+ * owned by the AI SDK. Talkio only converts its internal messages to the SDK's
+ * standard `ModelMessage` (done upstream in the message builder) and maps the
+ * SDK's `fullStream` back to Talkio's `GenerationEvent`s.
  */
 import {
   streamText,
+  stepCountIs,
   tool,
   jsonSchema,
   type JSONSchema7,
@@ -16,56 +18,102 @@ import {
   type ToolSet,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
+import { appFetch } from "../../../lib/http";
+import type { ApiFormat } from "../../../types";
 import type { GenerationEvent, GenerationError } from "../events";
 import type { ParticipantRequest, ParticipantRuntime } from "../types";
 
 /** Maps a participant request to an AI SDK language model instance. */
 export type ResolveModel = (request: ParticipantRequest) => LanguageModel;
 
+/** Gemini image-output models (nano-banana): mirrors the legacy adapter gate. */
+function supportsImageOutput(modelId: string): boolean {
+  return /-image(-|$)|image-generation/i.test(modelId);
+}
+
 /** Extract a bare API key from request headers (Authorization / x-api-key / x-goog-api-key). */
 export function extractApiKey(headers: Record<string, string>): string | undefined {
   const auth = headers["Authorization"] ?? headers["authorization"];
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return headers["x-api-key"] ?? headers["x-goog-api-key"] ?? undefined;
+  return (
+    headers["x-api-key"] ??
+    headers["x-goog-api-key"] ??
+    headers["api-key"] ??
+    headers["X-Api-Key"] ??
+    undefined
+  );
+}
+
+/** Drop the secret-bearing auth headers the SDK sets itself; keep custom headers. */
+function passthroughHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const lk = k.toLowerCase();
+    if (lk === "authorization" || lk === "x-api-key" || lk === "x-goog-api-key" || lk === "api-key")
+      continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Minimal shape needed to resolve a model — shared by chat, compression, probing. */
+export interface ModelResolveOptions {
+  apiFormat?: ApiFormat;
+  baseUrl: string;
+  headers: Record<string, string>;
+  modelId: string;
+}
+
+/** Resolve an AI SDK LanguageModel, routing every provider request through appFetch (CORS). */
+export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
+  const apiKey = extractApiKey(opts.headers);
+  const headers = passthroughHeaders(opts.headers);
+  const fetch = appFetch as unknown as typeof globalThis.fetch;
+  switch (opts.apiFormat) {
+    case "anthropic-messages":
+      return createAnthropic({ apiKey, baseURL: opts.baseUrl, headers, fetch }).messages(
+        opts.modelId,
+      );
+    case "gemini-generate-content":
+      return createGoogle({ apiKey, baseURL: opts.baseUrl, headers, fetch }).chat(opts.modelId);
+    case "responses":
+      return createOpenAI({ apiKey, baseURL: opts.baseUrl, headers, fetch }).responses(
+        opts.modelId,
+      );
+    default:
+      // OpenAI-compatible covers real OpenAI + third-party gateways and, unlike
+      // @ai-sdk/openai, surfaces `delta.reasoning` (build4ai / OpenRouter / etc.)
+      // so reasoning models show their thinking.
+      return createOpenAICompatible({
+        name: "openai-compatible",
+        baseURL: opts.baseUrl,
+        apiKey,
+        headers,
+        fetch,
+      }).chatModel(opts.modelId);
+  }
 }
 
 /** Default resolver: protocol → provider factory (OpenAI-compatible for the rest). */
 export function createModelResolver(): ResolveModel {
-  return (request) => {
-    const apiKey = extractApiKey(request.headers);
-    switch (request.apiFormat) {
-      case "anthropic-messages":
-        return createAnthropic({
-          apiKey,
-          baseURL: request.baseUrl,
-          headers: request.headers,
-        }).messages(request.modelId);
-      case "gemini-generate-content":
-        return createGoogle({
-          apiKey,
-          baseURL: request.baseUrl,
-          headers: request.headers,
-        }).generativeAI(request.modelId);
-      case "responses":
-        return createOpenAI({
-          apiKey,
-          baseURL: request.baseUrl,
-          headers: request.headers,
-        }).responses(request.modelId);
-      default:
-        return createOpenAI({
-          apiKey,
-          baseURL: request.baseUrl,
-          headers: request.headers,
-        }).chat(request.modelId);
-    }
-  };
+  return (request) =>
+    getLanguageModel({
+      apiFormat: request.apiFormat,
+      baseUrl: request.baseUrl,
+      headers: request.headers,
+      modelId: request.modelId,
+    });
 }
 
-/** Convert OpenAI-style tool defs to AI SDK tool definitions. */
-export function toAiSdkTools(toolDefs: unknown[]): Record<string, unknown> {
+/** Convert OpenAI-style tool defs to AI SDK tools. When `executeTool` is given,
+ * each tool gets an `execute` so the SDK runs the whole tool loop itself. */
+export function toAiSdkTools(
+  toolDefs: unknown[],
+  executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const def of toolDefs as Array<{
     type?: string;
@@ -74,12 +122,40 @@ export function toAiSdkTools(toolDefs: unknown[]): Record<string, unknown> {
     const fn = def.function;
     const name = fn?.name;
     if (!name) continue;
-    out[name] = tool({
-      description: fn.description,
-      inputSchema: jsonSchema((fn.parameters ?? { type: "object", properties: {} }) as JSONSchema7),
-    });
+    const inputSchema = jsonSchema<Record<string, unknown>>(
+      (fn.parameters ?? { type: "object", properties: {} }) as JSONSchema7,
+    );
+    out[name] = executeTool
+      ? tool({
+          description: fn.description,
+          inputSchema,
+          execute: (input) => executeTool(name, input),
+        })
+      : tool({ description: fn.description, inputSchema });
   }
   return out;
+}
+
+/** Coerce an AI SDK tool-result output into the text Talkio persists/displays. */
+function toolResultText(output: unknown): string {
+  if (typeof output === "string") return output;
+  if (output && typeof output === "object") {
+    const o = output as { type?: string; value?: unknown };
+    if (typeof o.value === "string") return o.value;
+  }
+  try {
+    return JSON.stringify(output);
+  } catch {
+    return String(output);
+  }
+}
+
+/** Build per-provider options (Gemini image output). Reasoning goes via the top-level setting. */
+function buildProviderOptions(request: ParticipantRequest): Record<string, unknown> | undefined {
+  if (request.apiFormat === "gemini-generate-content" && supportsImageOutput(request.modelId)) {
+    return { google: { responseModalities: ["TEXT", "IMAGE"] } };
+  }
+  return undefined;
 }
 
 /** Classify AI SDK error text into a structured GenerationError. */
@@ -119,7 +195,14 @@ export class AISdkRuntime implements ParticipantRuntime {
     else request.signal.addEventListener("abort", () => controller.abort(), { once: true });
 
     const model = this.resolveModel(request);
-    const tools = toAiSdkTools(request.toolDefs ?? []);
+    const tools = toAiSdkTools(request.toolDefs ?? [], request.executeTool);
+    const providerOptions = buildProviderOptions(request);
+
+    // System goes to the standard `system` parameter, not the messages array.
+    const all = request.messages;
+    const systemMsg = all.find((m) => m.role === "system");
+    const system = typeof systemMsg?.content === "string" ? systemMsg.content : undefined;
+    const messages = all.filter((m) => m.role !== "system");
 
     return {
       async *[Symbol.asyncIterator](): AsyncGenerator<GenerationEvent> {
@@ -128,10 +211,14 @@ export class AISdkRuntime implements ParticipantRuntime {
 
           const result = streamText({
             model,
-            // Our OpenAI-style messages are structurally compatible with
-            // ModelMessage (role literals + content/tool_calls/tool_call_id).
-            messages: request.messages as ModelMessage[],
+            system,
+            messages,
             tools: (Object.keys(tools).length > 0 ? tools : undefined) as ToolSet | undefined,
+            // When tools carry an execute fn, let the SDK run the whole
+            // call→execute→feed-back loop up to N steps.
+            stopWhen: request.executeTool ? stepCountIs(request.maxToolRounds ?? 8) : undefined,
+            reasoning: request.reasoningEffort as never,
+            providerOptions: providerOptions as never,
             abortSignal: controller.signal,
           });
 
@@ -150,15 +237,19 @@ export class AISdkRuntime implements ParticipantRuntime {
                 case "reasoning-delta":
                   yield { type: "thinking-delta", text: event.text };
                   break;
+                case "file":
+                  // Model-generated image (e.g. Gemini nano-banana) → data URL.
+                  if (event.file.mediaType?.startsWith("image/")) {
+                    yield {
+                      type: "image-generated",
+                      url: `data:${event.file.mediaType};base64,${event.file.base64}`,
+                    };
+                  }
+                  break;
                 case "tool-input-start":
-                  // fullStream tool-input events carry the tool call id in `id`.
                   if (!startedCalls.has(event.id)) {
                     startedCalls.add(event.id);
-                    yield {
-                      type: "tool-call-started",
-                      callId: event.id,
-                      name: event.toolName,
-                    };
+                    yield { type: "tool-call-started", callId: event.id, name: event.toolName };
                   }
                   break;
                 case "tool-input-delta":
@@ -170,8 +261,6 @@ export class AISdkRuntime implements ParticipantRuntime {
                   };
                   break;
                 case "tool-call": {
-                  // Complete tool input — emit started + arguments when the
-                  // provider never streamed incremental input for this call.
                   const callId = event.toolCallId;
                   if (!startedCalls.has(callId)) {
                     startedCalls.add(callId);
@@ -186,6 +275,21 @@ export class AISdkRuntime implements ParticipantRuntime {
                   }
                   break;
                 }
+                case "tool-result":
+                  // The SDK ran the tool's execute() and fed the result back.
+                  yield {
+                    type: "tool-result",
+                    callId: event.toolCallId,
+                    result: toolResultText(event.output),
+                  };
+                  break;
+                case "tool-error":
+                  yield {
+                    type: "tool-result",
+                    callId: event.toolCallId,
+                    result: `Error: ${event.error instanceof Error ? event.error.message : String(event.error)}`,
+                  };
+                  break;
                 case "finish":
                   if (event.totalUsage) {
                     yield {
@@ -219,13 +323,10 @@ export class AISdkRuntime implements ParticipantRuntime {
               if (terminated) break;
             }
           } catch (err) {
-            // AbortError from the underlying stream (e.g. cancel()).
             yield { type: "run-failed", error: classifyAiSdkError(err, controller.signal) };
             terminated = true;
           }
 
-          // Stream ended without an explicit finish event — settle with the
-          // result promises (backstop for unusual provider terminations).
           if (!terminated) {
             const [usage, finishReason] = await Promise.all([result.usage, result.finishReason]);
             if (usage && usage.inputTokens !== undefined) {

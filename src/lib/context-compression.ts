@@ -7,7 +7,8 @@
  *
  * Inspired by LobeChat's compressContext / summaryHistory chains.
  */
-import { getAdapter } from "../services/provider-adapters";
+import { generateText } from "ai";
+import { getLanguageModel } from "../services/runtime/ai-sdk/ai-sdk-runtime";
 import type { ApiFormat } from "../types";
 
 // ── Token estimation ──
@@ -34,7 +35,7 @@ export function estimateMessagesTokens(
     } else if (Array.isArray(m.content)) {
       for (const part of m.content) {
         if (part.type === "text" && part.text) total += estimateTokens(part.text);
-        if (part.type === "image_url") total += 85; // image token estimate
+        if (part.type === "image") total += 85; // image token estimate
       }
     }
   }
@@ -141,20 +142,19 @@ async function callCompressionApi(
     })
     .join("\n\n");
 
-  const adapter = getAdapter(apiFormat);
-  return adapter.chat({
-    baseUrl,
-    headers,
-    modelId: model,
+  const llm = getLanguageModel({ apiFormat, baseUrl, headers, modelId: model });
+  const { text } = await generateText({
+    model: llm,
+    system: COMPRESS_SYSTEM_PROMPT,
     messages: [
-      { role: "system", content: COMPRESS_SYSTEM_PROMPT },
       { role: "user", content: compressText },
       { role: "user", content: COMPRESS_USER_PROMPT },
     ],
-    maxTokens: 1000,
+    maxOutputTokens: 1000,
     temperature: 0.2,
-    signal,
+    abortSignal: signal,
   });
+  return text;
 }
 
 /**

@@ -18,12 +18,4 @@ export function getAdapter(apiFormat?: ApiFormat): ProviderAdapter {
   return chatCompletionsAdapter;
 }
 
-export type {
-  ProviderAdapter,
-  StreamDelta,
-  StreamChatParams,
-  StreamChatResult,
-  ChatParams,
-  ProbeParams,
-  ProbeResult,
-} from "./types";
+export type { ProviderAdapter, ProbeParams, ProbeResult } from "./types";

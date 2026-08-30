@@ -332,6 +332,7 @@
     "tools": "Tools",
     "reasoning": "Reasoning",
     "probe": "Probe",
+    "probeFailed": "Model capability probe failed",
     "type": "Type",
     "enabled": "Enabled",
     "customHeaders": "Custom Headers",
@@ -364,7 +365,17 @@
     "reasoningEffort_low": "Low",
     "reasoningEffort_medium": "Medium",
     "reasoningEffort_high": "High",
-    "reasoningEffort_xhigh": "XHigh"
+    "reasoningEffort_xhigh": "XHigh",
+    "reasoningEffort_max": "Max",
+    "contextWindow": "Context {{value}}",
+    "maxOutputTokens": "Max output {{value}}",
+    "reasoningLevels": "Reasoning {{value}}",
+    "reasoningBudget": "Budget {{value}} tokens",
+    "metadataSource_manual": "Manual",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "Provider API",
+    "metadataSource_probe": "Live probe",
+    "metadataSource_default": "Default"
   },
   "providers": {
     "deleteProvider": "Delete Provider",

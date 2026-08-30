@@ -68,7 +68,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import type { ConversationParticipant, Identity, ReasoningEffort } from "../../types";
-import { nextReasoningEffort, REASONING_EFFORT_LEVELS } from "../../types";
+import {
+  getSupportedReasoningEfforts,
+  nextReasoningEffort,
+  reasoningEffortLabel,
+} from "../../types";
 import { MessageStatus } from "../../types";
 import { exportConversationAsMarkdown, exportConversationAsPdf } from "../../services/export";
 import { exportConversationAsImages } from "../../services/export-image";
@@ -176,9 +180,7 @@ function SortableParticipantRow({
         title={t("providerEdit.reasoningEffort")}
       >
         <Sparkles size={10} className="mr-0.5 inline" />
-        {p.reasoningEffort
-          ? t(`providerEdit.reasoningEffort_${p.reasoningEffort}`)
-          : t("providerEdit.reasoningEffort_default")}
+        {reasoningEffortLabel(p.reasoningEffort)}
       </button>
       <Button
         variant="ghost"
@@ -243,6 +245,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
     setShowAddMemberPicker,
     duplicateConversation,
   } = useChatPanelState(conversationId);
+  const supportedReasoningEfforts = getSupportedReasoningEfforts(model);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const statsByParticipant = useMemo(() => computeParticipantStats(messages), [messages]);
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -572,24 +575,20 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                   className={`text-[10px] font-medium ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
                 >
                   {currentParticipant.reasoningEffort
-                    ? t(`providerEdit.reasoningEffort_${currentParticipant.reasoningEffort}`)
+                    ? reasoningEffortLabel(currentParticipant.reasoningEffort)
                     : t("providerEdit.reasoningEffort")}
                 </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[120px]">
-              {REASONING_EFFORT_LEVELS.map((level) => (
+              {supportedReasoningEfforts.map((level) => (
                 <DropdownMenuItem
                   key={level ?? "__default__"}
                   onClick={() =>
                     updateParticipantReasoningEffort(conversationId, currentParticipant.id, level)
                   }
                 >
-                  <span className="flex-1">
-                    {level
-                      ? t(`providerEdit.reasoningEffort_${level}`)
-                      : t("providerEdit.reasoningEffort_default")}
-                  </span>
+                  <span className="flex-1">{reasoningEffortLabel(level)}</span>
                   {currentParticipant.reasoningEffort === level && (
                     <span className="text-primary text-xs font-semibold">✓</span>
                   )}
@@ -824,7 +823,10 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                     updateParticipantReasoningEffort(
                       conversationId,
                       p.id,
-                      nextReasoningEffort(p.reasoningEffort),
+                      nextReasoningEffort(
+                        p.reasoningEffort,
+                        getSupportedReasoningEfforts(getModelById(p.modelId)),
+                      ),
                     );
                   }}
                 />

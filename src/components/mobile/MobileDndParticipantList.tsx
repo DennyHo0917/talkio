@@ -19,6 +19,7 @@ import { IoTrashOutline } from "../../icons";
 import { Activity, Pencil, Volume2, VolumeX } from "lucide-react";
 import { useChatStore } from "../../stores/chat-store";
 import type { ConversationParticipant } from "../../types";
+import { reasoningEffortLabel } from "../../types";
 import { getParticipantLabelParts } from "../../stores/chat-message-builder";
 import { formatTokenCount, type ParticipantStats } from "../../lib/participant-stats";
 
@@ -109,9 +110,7 @@ function MobileSortableRow({
         }}
         onClick={onReasoningEffortCycle}
       >
-        {p.reasoningEffort
-          ? t(`providerEdit.reasoningEffort_${p.reasoningEffort}`)
-          : t("providerEdit.reasoningEffort_default")}
+        {reasoningEffortLabel(p.reasoningEffort)}
       </button>
       <button
         className="flex h-7 w-7 flex-shrink-0 items-center justify-center active:opacity-60"

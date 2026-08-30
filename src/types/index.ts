@@ -43,7 +43,15 @@ export interface ModelCapabilities {
   streaming: boolean;
 }
 
-export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ReasoningOption =
+  | { type: "toggle" }
+  | { type: "effort"; values: Array<ReasoningEffort | "default"> }
+  | { type: "budget_tokens"; min?: number; max?: number };
+
+export type ModelMetadataSource = "manual" | "models.dev" | "provider" | "probe" | "default";
+export type ModelMetadataMatch = "exact" | "normalized";
 
 export const REASONING_EFFORT_LEVELS: readonly (ReasoningEffort | undefined)[] = [
   undefined,
@@ -53,13 +61,20 @@ export const REASONING_EFFORT_LEVELS: readonly (ReasoningEffort | undefined)[] =
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 export function nextReasoningEffort(
   current: ReasoningEffort | undefined,
+  supportedLevels: readonly (ReasoningEffort | undefined)[] = REASONING_EFFORT_LEVELS,
 ): ReasoningEffort | undefined {
-  const idx = REASONING_EFFORT_LEVELS.indexOf(current);
-  return REASONING_EFFORT_LEVELS[(idx + 1) % REASONING_EFFORT_LEVELS.length];
+  const levels = supportedLevels.length > 0 ? supportedLevels : [undefined];
+  const idx = levels.indexOf(current);
+  return levels[(idx + 1) % levels.length];
+}
+
+export function reasoningEffortLabel(value: ReasoningEffort | undefined): string {
+  return value ?? "default";
 }
 
 export interface Model {
@@ -71,7 +86,27 @@ export interface Model {
   capabilities: ModelCapabilities;
   capabilitiesVerified: boolean;
   maxContextLength: number;
+  maxOutputTokens?: number;
+  reasoningOptions?: ReasoningOption[];
+  metadataSource?: ModelMetadataSource;
+  metadataMatch?: ModelMetadataMatch;
+  metadataProviderId?: string;
   enabled: boolean;
+}
+
+export function getSupportedReasoningEfforts(
+  model: Model | null | undefined,
+): readonly (ReasoningEffort | undefined)[] {
+  if (!model?.capabilities.reasoning) return [undefined];
+  const effortOption = model.reasoningOptions?.find((option) => option.type === "effort");
+  if (!effortOption || effortOption.type !== "effort") return [undefined];
+
+  const levels: Array<ReasoningEffort | undefined> = [undefined];
+  for (const value of effortOption.values) {
+    const level = value === "default" ? undefined : value;
+    if (!levels.includes(level)) levels.push(level);
+  }
+  return levels;
 }
 
 export interface IdentityParams {

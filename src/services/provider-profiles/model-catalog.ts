@@ -1,493 +1,244 @@
 /**
- * Model catalog — versioned model capability metadata with a user override
- * layer. Priority when resolving a model's metadata:
- *   1. user overrides (localStorage)
- *   2. built-in catalog
+ * Offline model metadata catalog generated from models.dev.
  *
- * This mirrors the doc recommendation: prefer known metadata over probing,
- * which costs money and can misjudge capabilities.
+ * Resolution order:
+ *   1. provider-scoped user override
+ *   2. exact provider/model match
+ *   3. exact model id match in a canonical provider
+ *   4. conservative normalized match in a canonical provider
+ *
+ * Network access only happens in scripts/sync-models-dev.mjs. Runtime lookup
+ * always uses the checked-in snapshot so startup and model selection work offline.
  */
 import { kvStore } from "../../storage/kv-store";
-import type { ModelDescriptor } from "./types";
+import type { ReasoningOption } from "../../types";
+import snapshotJson from "./models-dev.generated.json";
+import type { ModelDescriptor, ResolvedModelDescriptor } from "./types";
 
 export const MODEL_CATALOG_VERSION = 1;
 const OVERRIDES_KEY = "model-catalog-overrides";
 const DEFAULT_PROFILE_ID = "global";
 
-function overrideKey(providerProfileId: string, modelId: string): string {
-  return `${providerProfileId}:${modelId}`;
+const PROFILE_PROVIDER_ALIASES: Record<string, string> = {
+  "azure-openai": "openai",
+  fireworks: "fireworks-ai",
+  gemini: "google",
+  together: "togetherai",
+};
+
+const CANONICAL_PROVIDER_IDS = new Set([
+  "alibaba",
+  "anthropic",
+  "cohere",
+  "deepseek",
+  "google",
+  "meta",
+  "minimax",
+  "minimax-cn",
+  "mistral",
+  "moonshotai",
+  "moonshotai-cn",
+  "nvidia",
+  "openai",
+  "perplexity",
+  "xai",
+  "zai",
+  "zhipuai",
+]);
+
+const FAMILY_PROVIDER_HINTS: Array<[RegExp, string[]]> = [
+  [/^(?:chatgpt-|gpt-|o\d)/, ["openai"]],
+  [/^claude-/, ["anthropic"]],
+  [/^(?:gemini-|gemma-)/, ["google"]],
+  [/^deepseek-/, ["deepseek"]],
+  [/^grok-/, ["xai"]],
+  [/^(?:mistral-|codestral-)/, ["mistral"]],
+  [/^command-/, ["cohere"]],
+  [/^llama-/, ["meta"]],
+  [/^(?:qwen|qwq)/, ["alibaba"]],
+  [/^kimi-/, ["moonshotai", "moonshotai-cn"]],
+  [/^minimax-/, ["minimax", "minimax-cn"]],
+  [/^glm-/, ["zai", "zhipuai"]],
+];
+
+type ModelsDevModel = {
+  name?: string;
+  input: string[];
+  output: string[];
+  context?: number;
+  maxOutput?: number;
+  reasoning: boolean;
+  reasoningOptions: ReasoningOption[];
+  tools: boolean;
+  interleavedField?: string;
+};
+
+type ModelsDevSnapshot = {
+  schemaVersion: number;
+  source: string;
+  providers: Record<string, Record<string, ModelsDevModel>>;
+};
+
+type CatalogEntry = {
+  providerId: string;
+  modelId: string;
+  model: ModelsDevModel;
+};
+
+const snapshot = snapshotJson as ModelsDevSnapshot;
+if (snapshot.schemaVersion !== 1) {
+  throw new Error(`Unsupported models.dev snapshot schema: ${snapshot.schemaVersion}`);
 }
 
-export const MODEL_CATALOG: ModelDescriptor[] = [
-  // OpenAI (Responses)
-  {
-    modelId: "gpt-4o",
-    displayName: "GPT-4o",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      strictToolSchema: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-4o-mini",
-    displayName: "GPT-4o mini",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-4.1",
-    displayName: "GPT-4.1",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1047576,
-    maxOutputTokens: 32768,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      strictToolSchema: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-4.1-mini",
-    displayName: "GPT-4.1 mini",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1047576,
-    maxOutputTokens: 32768,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-4.1-nano",
-    displayName: "GPT-4.1 nano",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1047576,
-    maxOutputTokens: 32768,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-4.5-preview",
-    displayName: "GPT-4.5",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "o3",
-    displayName: "o3",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "o3-mini",
-    displayName: "o3 mini",
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "o4-mini",
-    displayName: "o4 mini",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-5",
-    displayName: "GPT-5",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 400000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-5-mini",
-    displayName: "GPT-5 mini",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 400000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-5-nano",
-    displayName: "GPT-5 nano",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 400000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "gpt-5.1",
-    displayName: "GPT-5.1",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 400000,
-    maxOutputTokens: 100000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-      promptCaching: true,
-    },
-  },
+const catalogEntries: CatalogEntry[] = Object.entries(snapshot.providers).flatMap(
+  ([providerId, models]) =>
+    Object.entries(models).map(([modelId, model]) => ({ providerId, modelId, model })),
+);
 
-  // Anthropic
-  {
-    modelId: "claude-sonnet-4-20250514",
-    displayName: "Claude Sonnet 4",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 64000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-3-5-sonnet-20241022",
-    displayName: "Claude 3.5 Sonnet",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-3-5-haiku-20241022",
-    displayName: "Claude 3.5 Haiku",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 8192,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-opus-4-20250514",
-    displayName: "Claude Opus 4",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 64000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-sonnet-4-5-20250929",
-    displayName: "Claude Sonnet 4.5",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 64000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-haiku-4-5-20251001",
-    displayName: "Claude Haiku 4.5",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 200000,
-    maxOutputTokens: 64000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-  {
-    modelId: "claude-opus-4-1-20250805",
-    displayName: "Claude Opus 4.1",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1000000,
-    maxOutputTokens: 64000,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      promptCaching: true,
-    },
-  },
-
-  // Google Gemini
-  {
-    modelId: "gemini-2.5-pro",
-    displayName: "Gemini 2.5 Pro",
-    inputModalities: ["text", "image", "audio", "video", "file"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 65536,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-      remoteMcp: true,
-    },
-  },
-  {
-    modelId: "gemini-2.5-flash",
-    displayName: "Gemini 2.5 Flash",
-    inputModalities: ["text", "image", "audio", "video", "file"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 65536,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-      remoteMcp: true,
-    },
-  },
-  {
-    modelId: "gemini-2.5-flash-lite",
-    displayName: "Gemini 2.5 Flash-Lite",
-    inputModalities: ["text", "image", "audio", "video", "file"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 65536,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-    },
-  },
-  {
-    modelId: "gemini-2.5-flash-preview-05-20",
-    displayName: "Gemini 2.5 Flash (preview)",
-    inputModalities: ["text", "image", "audio", "video", "file"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 65536,
-    capabilities: {
-      streaming: true,
-      reasoning: true,
-      tools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-    },
-  },
-  {
-    modelId: "gemini-2.0-flash",
-    displayName: "Gemini 2.0 Flash",
-    inputModalities: ["text", "image", "audio", "video", "file"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 8192,
-    capabilities: {
-      streaming: true,
-      reasoning: false,
-      tools: true,
-      parallelTools: true,
-      structuredOutput: true,
-      nativeSearch: true,
-    },
-  },
-  {
-    modelId: "gemini-2.0-flash-lite",
-    displayName: "Gemini 2.0 Flash-Lite",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1048576,
-    maxOutputTokens: 8192,
-    capabilities: { streaming: true, reasoning: false, tools: true, structuredOutput: true },
-  },
-
-  // DeepSeek
-  {
-    modelId: "deepseek-chat",
-    displayName: "DeepSeek Chat",
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 8192,
-    capabilities: { streaming: true, reasoning: false, tools: true },
-  },
-  {
-    modelId: "deepseek-reasoner",
-    displayName: "DeepSeek Reasoner",
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 8192,
-    capabilities: { streaming: true, reasoning: true, tools: false },
-  },
-
-  // OpenRouter
-  {
-    modelId: "openrouter/auto",
-    displayName: "OpenRouter Auto",
-    inputModalities: ["text", "image"],
-    outputModalities: ["text"],
-    contextWindow: 1000000,
-    maxOutputTokens: 65536,
-    capabilities: { streaming: true, reasoning: true, tools: true },
-  },
-
-  // Local
-  {
-    modelId: "llama3.1",
-    displayName: "Llama 3.1",
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    contextWindow: 128000,
-    maxOutputTokens: 8192,
-    capabilities: { streaming: true, reasoning: false, tools: false },
-  },
-  {
-    modelId: "qwen2.5",
-    displayName: "Qwen 2.5",
-    inputModalities: ["text"],
-    outputModalities: ["text"],
-    contextWindow: 32768,
-    maxOutputTokens: 8192,
-    capabilities: { streaming: true, reasoning: false, tools: false },
-  },
-];
+const exactIndex = buildIndex((entry) => entry.modelId.toLowerCase());
+const normalizedIndex = buildIndex((entry) => normalizeModelId(entry.modelId));
 
 export interface ModelCatalogState {
   version: number;
   overrides: Record<string, Partial<ModelDescriptor>>;
+}
+
+function overrideKey(providerProfileId: string, modelId: string): string {
+  return `${providerProfileId}:${modelId}`;
+}
+
+function catalogProviderId(providerProfileId: string): string {
+  return PROFILE_PROVIDER_ALIASES[providerProfileId] ?? providerProfileId;
+}
+
+function normalizeModelId(modelId: string): string {
+  const withoutModelsPrefix = modelId
+    .trim()
+    .replace(/^models\//i, "")
+    .replace(/^~/, "");
+  const basename = withoutModelsPrefix.split("/").at(-1) ?? withoutModelsPrefix;
+  let normalized = basename.toLowerCase().replace(/:\d{4,8}$/, "");
+  const gatewayOptionSuffix =
+    /-(?:extra-low|non-reasoning|reasoning|thinking|minimal|low|medium|high|xhigh|max|fast|agent)$/;
+  while (gatewayOptionSuffix.test(normalized)) {
+    normalized = normalized.replace(gatewayOptionSuffix, "");
+  }
+  return normalized;
+}
+
+function buildIndex(keyOf: (entry: CatalogEntry) => string): Map<string, CatalogEntry[]> {
+  const index = new Map<string, CatalogEntry[]>();
+  for (const entry of catalogEntries) {
+    const key = keyOf(entry);
+    const matches = index.get(key);
+    if (matches) matches.push(entry);
+    else index.set(key, [entry]);
+  }
+  return index;
+}
+
+function inputModalities(values: string[]): ModelDescriptor["inputModalities"] {
+  const mapped = values.map((value) => (value === "pdf" ? "file" : value));
+  return [...new Set(mapped)].filter(
+    (value): value is ModelDescriptor["inputModalities"][number] =>
+      value === "text" ||
+      value === "image" ||
+      value === "audio" ||
+      value === "video" ||
+      value === "file",
+  );
+}
+
+function outputModalities(values: string[]): ModelDescriptor["outputModalities"] {
+  return [...new Set(values)].filter(
+    (value): value is ModelDescriptor["outputModalities"][number] =>
+      value === "text" || value === "image" || value === "audio",
+  );
+}
+
+function entryToDescriptor(entry: CatalogEntry): ModelDescriptor {
+  return {
+    modelId: entry.modelId,
+    displayName: entry.model.name ?? entry.modelId,
+    inputModalities: inputModalities(entry.model.input),
+    outputModalities: outputModalities(entry.model.output),
+    contextWindow: entry.model.context,
+    maxOutputTokens: entry.model.maxOutput,
+    reasoningOptions: entry.model.reasoningOptions,
+    interleavedReasoningField: entry.model.interleavedField,
+    capabilities: {
+      reasoning: entry.model.reasoning,
+      tools: entry.model.tools,
+    },
+  };
+}
+
+function inferredProviderIds(modelId: string): string[] {
+  const normalized = normalizeModelId(modelId);
+  return FAMILY_PROVIDER_HINTS.find(([pattern]) => pattern.test(normalized))?.[1] ?? [];
+}
+
+function descriptorFingerprint(entry: CatalogEntry): string {
+  const model = entry.model;
+  return JSON.stringify({
+    input: model.input,
+    output: model.output,
+    context: model.context,
+    maxOutput: model.maxOutput,
+    reasoning: model.reasoning,
+    reasoningOptions: model.reasoningOptions,
+    tools: model.tools,
+  });
+}
+
+function chooseGlobalMatch(modelId: string, candidates: CatalogEntry[]): CatalogEntry | undefined {
+  if (candidates.length === 0) return undefined;
+
+  const providerHints = inferredProviderIds(modelId);
+  for (const providerId of providerHints) {
+    const hinted = candidates.find((candidate) => candidate.providerId === providerId);
+    if (hinted) return hinted;
+  }
+
+  const canonical = candidates.filter((candidate) =>
+    CANONICAL_PROVIDER_IDS.has(candidate.providerId),
+  );
+  if (canonical.length === 1) return canonical[0];
+  if (canonical.length === 0) return undefined;
+
+  const fingerprints = new Set(canonical.map(descriptorFingerprint));
+  return fingerprints.size === 1 ? canonical[0] : undefined;
+}
+
+function findCatalogEntry(
+  providerProfileId: string,
+  modelId: string,
+): { entry: CatalogEntry; match: "exact" | "normalized" } | undefined {
+  const providerId = catalogProviderId(providerProfileId);
+  const providerModels = snapshot.providers[providerId];
+  const direct = providerModels?.[modelId];
+  if (direct) return { entry: { providerId, modelId, model: direct }, match: "exact" };
+
+  const caseInsensitiveDirect = providerModels
+    ? Object.entries(providerModels).find(
+        ([candidateId]) => candidateId.toLowerCase() === modelId.toLowerCase(),
+      )
+    : undefined;
+  if (caseInsensitiveDirect) {
+    return {
+      entry: { providerId, modelId: caseInsensitiveDirect[0], model: caseInsensitiveDirect[1] },
+      match: "exact",
+    };
+  }
+
+  const exact = chooseGlobalMatch(modelId, exactIndex.get(modelId.toLowerCase()) ?? []);
+  if (exact) return { entry: exact, match: "exact" };
+
+  const normalized = chooseGlobalMatch(
+    modelId,
+    normalizedIndex.get(normalizeModelId(modelId)) ?? [],
+  );
+  return normalized ? { entry: normalized, match: "normalized" } : undefined;
 }
 
 function loadOverrides(): Record<string, Partial<ModelDescriptor>> {
@@ -503,50 +254,84 @@ function persistOverrides(overrides: Record<string, Partial<ModelDescriptor>>): 
   } satisfies ModelCatalogState);
 }
 
+function mergeDescriptor(
+  base: ModelDescriptor | undefined,
+  modelId: string,
+  override: Partial<ModelDescriptor>,
+): ModelDescriptor {
+  return {
+    modelId,
+    displayName: modelId,
+    inputModalities: ["text"],
+    outputModalities: ["text"],
+    ...base,
+    ...override,
+    capabilities:
+      base?.capabilities || override.capabilities
+        ? { ...base?.capabilities, ...override.capabilities }
+        : undefined,
+    providerOptions:
+      base?.providerOptions || override.providerOptions
+        ? { ...base?.providerOptions, ...override.providerOptions }
+        : undefined,
+  };
+}
+
 /** Resolve metadata for a provider/model pair. */
 export function resolveModelDescriptor(
   providerProfileId: string,
   modelId?: string,
-): ModelDescriptor | undefined {
+): ResolvedModelDescriptor | undefined {
   const resolvedModelId = modelId ?? providerProfileId;
   const resolvedProfileId = modelId ? providerProfileId : DEFAULT_PROFILE_ID;
   const overrides = loadOverrides();
   const override = overrides[overrideKey(resolvedProfileId, resolvedModelId)];
-  const base = MODEL_CATALOG.find((model) => model.modelId === resolvedModelId);
-  if (!override) return base;
-  if (!base) {
-    return {
-      modelId: resolvedModelId,
-      displayName: resolvedModelId,
-      inputModalities: ["text"],
-      outputModalities: ["text"],
-      ...override,
-    } satisfies ModelDescriptor;
-  }
-  return { ...base, ...override };
+  const match = findCatalogEntry(resolvedProfileId, resolvedModelId);
+  const base = match ? entryToDescriptor(match.entry) : undefined;
+  if (!base && !override) return undefined;
+
+  return {
+    ...mergeDescriptor(base, resolvedModelId, override ?? {}),
+    metadataSource: override ? "manual" : "models.dev",
+    metadataMatch: match?.match,
+    metadataProviderId: match?.entry.providerId,
+  };
 }
 
 /** All catalog entries for one provider profile, including override-only models. */
 export function getAllModelDescriptors(
   providerProfileId: string = DEFAULT_PROFILE_ID,
-): ModelDescriptor[] {
+): ResolvedModelDescriptor[] {
   const overrides = loadOverrides();
+  const providerId = catalogProviderId(providerProfileId);
+  const providerModels = snapshot.providers[providerId] ?? {};
+  const merged: ResolvedModelDescriptor[] = Object.entries(providerModels).map(
+    ([modelId, model]) => {
+      const override = overrides[overrideKey(providerProfileId, modelId)];
+      return {
+        ...mergeDescriptor(
+          entryToDescriptor({ providerId, modelId, model }),
+          modelId,
+          override ?? {},
+        ),
+        metadataSource: override ? ("manual" as const) : ("models.dev" as const),
+        metadataMatch: "exact" as const,
+        metadataProviderId: providerId,
+      };
+    },
+  );
+
+  const builtInIds = new Set(Object.keys(providerModels));
   const prefix = `${providerProfileId}:`;
-  const merged = MODEL_CATALOG.map((model) => ({
-    ...model,
-    ...(overrides[overrideKey(providerProfileId, model.modelId)] ?? {}),
-  }));
-  const builtInIds = new Set(MODEL_CATALOG.map((model) => model.modelId));
   for (const [key, override] of Object.entries(overrides)) {
     if (!key.startsWith(prefix)) continue;
     const modelId = key.slice(prefix.length);
     if (builtInIds.has(modelId)) continue;
     merged.push({
-      modelId,
-      displayName: modelId,
-      inputModalities: ["text"],
-      outputModalities: ["text"],
-      ...override,
+      ...mergeDescriptor(undefined, modelId, override),
+      metadataSource: "manual",
+      metadataMatch: undefined,
+      metadataProviderId: undefined,
     });
   }
   return merged;
@@ -565,7 +350,6 @@ export function setModelOverride(
   persistOverrides(overrides);
 }
 
-/** Bump the catalog version when built-in metadata changes; resets overrides. */
 export function resetModelOverrides(): void {
   kvStore.delete(OVERRIDES_KEY);
 }
