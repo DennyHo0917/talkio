@@ -255,15 +255,15 @@ const ProvidersList: ActivityComponentType = () => {
       providers
         .filter((p) => p.enabled !== false)
         .map(async (p: { id: string }) => {
-        await updateProvider(p.id, { status: "pending" });
-        try {
-          await fetchModels(p.id);
-          success++;
-        } catch {
-          await updateProvider(p.id, { status: "error", enabled: false });
-          failed++;
-        }
-      }),
+          await updateProvider(p.id, { status: "pending" });
+          try {
+            await fetchModels(p.id);
+            success++;
+          } catch {
+            await updateProvider(p.id, { status: "error" });
+            failed++;
+          }
+        }),
     );
     if (failed === 0) {
       toast.success(t("providers.refreshSuccess", { success }));
@@ -274,7 +274,6 @@ const ProvidersList: ActivityComponentType = () => {
     }
     setRefreshing(false);
   }, [refreshing, providers, fetchModels, updateProvider, t]);
-
 
   return (
     <AppScreen

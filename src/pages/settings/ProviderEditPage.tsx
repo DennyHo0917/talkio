@@ -171,6 +171,9 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
         appAlert(t("providerEdit.connectionFailed", { defaultValue: "Connection failed" }));
         return;
       }
+      // A successful explicit connect action makes the provider usable again.
+      await updateProvider(providerId, { enabled: true });
+      setProviderEnabled(true);
 
       setPulling(true);
       const models = await fetchModels(providerId);

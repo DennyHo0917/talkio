@@ -660,17 +660,17 @@ function RefreshAllButton() {
       providers
         .filter((p) => p.enabled !== false)
         .map(async (p: { id: string; name: string }) => {
-        await updateProvider(p.id, { status: "pending" });
-        try {
-          await fetchModels(p.id);
-          success++;
-        } catch (err: any) {
-          console.error(`[RefreshAll] ${p.name} failed:`, err?.message || err);
-          await updateProvider(p.id, { status: "error", enabled: false });
-          failedNames.push(`${p.name}: ${err?.message || "unknown"}`);
-          failed++;
-        }
-      }),
+          await updateProvider(p.id, { status: "pending" });
+          try {
+            await fetchModels(p.id);
+            success++;
+          } catch (err: any) {
+            console.error(`[RefreshAll] ${p.name} failed:`, err?.message || err);
+            await updateProvider(p.id, { status: "error" });
+            failedNames.push(`${p.name}: ${err?.message || "unknown"}`);
+            failed++;
+          }
+        }),
     );
     if (failed === 0) {
       toast.success(t("providers.refreshSuccess", { success }));
@@ -699,7 +699,6 @@ function RefreshAllButton() {
     </button>
   );
 }
-
 
 // ── Providers List Sub-page (1:1 RN original) ──
 
