@@ -366,21 +366,24 @@ export const MessageRow = memo(function MessageRow({
   const hasGeneratedImages = message.generatedImages.length > 0;
   const pendingImageTool = message.toolCalls?.some(
     (toolCall) =>
+      isStreaming &&
       toolCall.name === "generate_image" &&
       !message.toolResults?.some((result) => result.toolCallId === toolCall.id),
   );
-  const directImagePending =
-    isStreaming &&
+  const standaloneImageModel =
     !!senderModel?.imageGenerationApi &&
     senderModel.outputModalities.includes("image") &&
     !senderModel.outputModalities.includes("text");
+  const directImagePending = isStreaming && standaloneImageModel;
+  const directImageCancelled =
+    message.status === MessageStatus.PAUSED && standaloneImageModel && !hasGeneratedImages;
   const imageGenerationPending = !!pendingImageTool || directImagePending;
   const showAssistantBubble =
     !!content ||
     !!message.reasoningContent ||
     (isStreaming && !directImagePending) ||
     message.status === MessageStatus.ERROR ||
-    (!hasToolCalls && !hasGeneratedImages && !directImagePending);
+    (!hasToolCalls && !hasGeneratedImages && !directImagePending && !directImageCancelled);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedPendingFiles, setExpandedPendingFiles] = useState<Set<string>>(new Set());
   const [isEditing, setIsEditing] = useState(false);
@@ -827,6 +830,13 @@ export const MessageRow = memo(function MessageRow({
         </div>
       )}
 
+      {directImageCancelled && (
+        <div className="text-muted-foreground flex items-center gap-1.5 px-1 py-1 text-xs">
+          <X size={13} />
+          <span>{t("chat.cancelled")}</span>
+        </div>
+      )}
+
       {/* Generated images */}
       {generatedImageUrls.length > 0 && (
         <div className="flex flex-wrap gap-1.5" style={{ maxWidth: 720 }}>
@@ -847,12 +857,13 @@ export const MessageRow = memo(function MessageRow({
           {message.toolCalls.map((tc) => {
             const result = message.toolResults?.find((r) => r.toolCallId === tc.id);
             const isExpanded = expandedTools.has(tc.id);
-            const isPending = !result;
+            const isPending = isStreaming && !result;
+            const isCancelled = message.status === MessageStatus.PAUSED && !result;
             return (
               <div key={tc.id} className="overflow-hidden rounded-lg">
                 <button
                   onClick={() => {
-                    if (isPending) return;
+                    if (!result) return;
                     setExpandedTools((prev) => {
                       const next = new Set(prev);
                       next.has(tc.id) ? next.delete(tc.id) : next.add(tc.id);
@@ -870,16 +881,22 @@ export const MessageRow = memo(function MessageRow({
                         className="flex-shrink-0 animate-spin"
                         style={{ animationDuration: "2s" }}
                       />
+                    ) : isCancelled ? (
+                      <X size={13} color="var(--muted-foreground)" className="flex-shrink-0" />
                     ) : (
                       <Wrench size={13} color="var(--muted-foreground)" className="flex-shrink-0" />
                     )}
                     <span
                       className={`truncate text-[12px] font-medium ${isPending ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                     >
-                      {isPending ? `${tc.name}…` : tc.name}
+                      {isPending
+                        ? `${tc.name}…`
+                        : isCancelled
+                          ? `${tc.name} · ${t("chat.cancelled")}`
+                          : tc.name}
                     </span>
                   </div>
-                  {!isPending &&
+                  {result &&
                     (isExpanded ? (
                       <ChevronUp size={14} color="var(--muted-foreground)" />
                     ) : (

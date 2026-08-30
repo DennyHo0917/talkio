@@ -185,6 +185,7 @@
     "unmuteMember": "Unmute",
     "generatedImage": "Generated image",
     "generatingImage": "Generating image…",
+    "cancelled": "Cancelled",
     "imagePrompt": "Describe the image you want to create",
     "imageModelAttachments": "The current image model does not support attachments."
   },

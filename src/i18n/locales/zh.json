@@ -183,6 +183,7 @@
     "create": "新建",
     "generatedImage": "生成的图片",
     "generatingImage": "正在生成图片…",
+    "cancelled": "已取消",
     "imagePrompt": "描述你想生成的图片",
     "imageModelAttachments": "当前生图模型暂不支持附件。"
   },

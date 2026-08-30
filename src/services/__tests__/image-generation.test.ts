@@ -202,6 +202,31 @@ describe("generate_image tool", () => {
     expect(result?.error).toMatch(/401|bad key/i);
   });
 
+  it("aborts an in-flight image request when the conversation stops", async () => {
+    appFetch.mockImplementation((_input, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("The operation was aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const controller = new AbortController();
+    const { executeBuiltInTool } = await import("../built-in-tools");
+
+    const pending = executeBuiltInTool(
+      "generate_image",
+      { prompt: "a red cube" },
+      { signal: controller.signal },
+    );
+    await vi.waitFor(() => expect(appFetch).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(appFetch.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
   it("offers configured image models in the tool schema", async () => {
     const { getBuiltInToolDefs } = await import("../built-in-tools");
     const generateImage = getBuiltInToolDefs().find(

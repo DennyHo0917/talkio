@@ -198,7 +198,10 @@ export async function generateForParticipant(
   );
 
   // Resolve tool definitions
-  const toolContext = { workspaceDir: ctx.conversation.workspaceDir || undefined };
+  const toolContext = {
+    workspaceDir: ctx.conversation.workspaceDir || undefined,
+    signal: ctx.abortController.signal,
+  };
   const builtInToolDefs = (() => {
     const defs = getBuiltInToolDefs(toolContext);
     const selected = allowedBuiltInToolNames ?? new Set<string>();

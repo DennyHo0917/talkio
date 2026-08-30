@@ -35,6 +35,7 @@ export interface ToolResult {
 
 export interface ToolContext {
   workspaceDir?: string;
+  signal?: AbortSignal;
 }
 
 export interface BuiltInToolDef {
@@ -84,7 +85,10 @@ function failResult(error: string): ToolResult {
   return { success: false, content: "", error };
 }
 
-async function handleGenerateImage(args: Record<string, unknown>): Promise<ToolResult> {
+async function handleGenerateImage(
+  args: Record<string, unknown>,
+  context?: ToolContext,
+): Promise<ToolResult> {
   const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
   if (!prompt) return failResult("Missing required parameter: prompt");
   const size = typeof args.size === "string" && args.size ? args.size : undefined;
@@ -93,7 +97,7 @@ async function handleGenerateImage(args: Record<string, unknown>): Promise<ToolR
   const model = typeof args.model === "string" && args.model ? args.model : undefined;
   try {
     const images = await persistGeneratedImages(
-      await generateImages({ prompt, size, aspectRatio, model }),
+      await generateImages({ prompt, size, aspectRatio, model, signal: context?.signal }),
     );
     return {
       success: true,
@@ -101,6 +105,7 @@ async function handleGenerateImage(args: Record<string, unknown>): Promise<ToolR
       images,
     };
   } catch (err) {
+    if (context?.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
     return failResult(err instanceof Error ? err.message : "Image generation failed");
   }
 }
@@ -388,7 +393,7 @@ export const BUILT_IN_TOOLS: BuiltInToolDef[] = [
       },
       required: ["prompt"],
     },
-    handler: (args) => handleGenerateImage(args),
+    handler: (args, context) => handleGenerateImage(args, context),
     enabledByDefault: true,
     requiresImageConfig: true,
   },
@@ -481,6 +486,7 @@ export async function executeBuiltInTool(
   try {
     return await tool.handler(args, context);
   } catch (err) {
+    if (context?.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
     return {
       success: false,
       content: "",
