@@ -304,8 +304,9 @@ export async function generateForParticipant(
         ) {
           flusher.schedule();
         }
-        if (event.type === "tool-result") {
-          // Persist tool progress mid-loop so the UI reflects each call/result.
+        if (event.type === "tool-call-started" || event.type === "tool-result") {
+          // Persist both the pending call and its result so long-running tools
+          // remain visible while the SDK awaits execute().
           await updateMessage(assistantMsgId, {
             toolCalls: [...acc.pendingToolCalls],
             toolResults: [...acc.toolResults],

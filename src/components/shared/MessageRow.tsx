@@ -27,6 +27,8 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
 import { MessageContent } from "./MessageContent";
 import type { ConversationParticipant, Message, Task } from "../../types";
@@ -355,14 +357,30 @@ export const MessageRow = memo(function MessageRow({
     );
     return { displayText: cleaned.trimStart(), fileNames: names };
   }, [rawContent]);
+  const senderModel = useProviderStore((state) =>
+    message.senderModelId
+      ? state.models.find((model) => model.id === message.senderModelId)
+      : undefined,
+  );
   const hasToolCalls = (message.toolCalls?.length ?? 0) > 0;
   const hasGeneratedImages = message.generatedImages.length > 0;
+  const pendingImageTool = message.toolCalls?.some(
+    (toolCall) =>
+      toolCall.name === "generate_image" &&
+      !message.toolResults?.some((result) => result.toolCallId === toolCall.id),
+  );
+  const directImagePending =
+    isStreaming &&
+    !!senderModel?.imageGenerationApi &&
+    senderModel.outputModalities.includes("image") &&
+    !senderModel.outputModalities.includes("text");
+  const imageGenerationPending = !!pendingImageTool || directImagePending;
   const showAssistantBubble =
     !!content ||
     !!message.reasoningContent ||
-    isStreaming ||
+    (isStreaming && !directImagePending) ||
     message.status === MessageStatus.ERROR ||
-    (!hasToolCalls && !hasGeneratedImages);
+    (!hasToolCalls && !hasGeneratedImages && !directImagePending);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedPendingFiles, setExpandedPendingFiles] = useState<Set<string>>(new Set());
   const [isEditing, setIsEditing] = useState(false);
@@ -788,6 +806,24 @@ export const MessageRow = memo(function MessageRow({
           ) : (
             <MessageContent message={message} isStreaming={isStreaming} />
           )}
+        </div>
+      )}
+
+      {imageGenerationPending && (
+        <div
+          className="border-border bg-muted/60 flex aspect-[4/3] w-full max-w-[400px] items-center justify-center rounded-lg border border-dashed"
+          aria-live="polite"
+        >
+          <div className="text-muted-foreground flex flex-col items-center gap-2">
+            <div className="relative">
+              <ImageIcon size={28} className="opacity-40" />
+              <Loader2
+                size={16}
+                className="bg-muted absolute -right-2 -bottom-1 animate-spin rounded-full"
+              />
+            </div>
+            <span className="text-xs font-medium">{t("chat.generatingImage")}</span>
+          </div>
         </div>
       )}
 
