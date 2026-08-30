@@ -127,7 +127,10 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
   }, [orderedModels, modelSearch]);
 
   const allEnabled = useMemo(() => displayModels.every((m) => m.enabled), [displayModels]);
-  const enabledModels = useMemo(() => displayModels.filter((m) => m.enabled), [displayModels]);
+  const enabledModels = useMemo(
+    () => displayModels.filter((m) => m.enabled && m.outputModalities.includes("text")),
+    [displayModels],
+  );
   const trimmedModelId = newModelId.trim();
 
   const handleBatchHealthCheck = useCallback(async () => {
@@ -335,21 +338,23 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                     )}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => handleSingleHealthCheck(m.id)}
-                    disabled={healthCheckingIds.has(m.id)}
-                    className="p-1 active:opacity-60 disabled:opacity-40"
-                    title={t("providerEdit.healthCheck")}
-                  >
-                    {healthCheckingIds.has(m.id) ? (
-                      <span
-                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                        style={{ color: "var(--primary)" }}
-                      />
-                    ) : (
-                      <IoPulseOutline size={16} color="var(--primary)" />
-                    )}
-                  </button>
+                  {m.outputModalities.includes("text") && (
+                    <button
+                      onClick={() => handleSingleHealthCheck(m.id)}
+                      disabled={healthCheckingIds.has(m.id)}
+                      className="p-1 active:opacity-60 disabled:opacity-40"
+                      title={t("providerEdit.healthCheck")}
+                    >
+                      {healthCheckingIds.has(m.id) ? (
+                        <span
+                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                          style={{ color: "var(--primary)" }}
+                        />
+                      ) : (
+                        <IoPulseOutline size={16} color="var(--primary)" />
+                      )}
+                    </button>
+                  )}
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
                       aria-label={`${m.displayName} ${t("providerEdit.enabled")}`}
@@ -402,42 +407,46 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                     {cap.label}
                   </span>
                 ))}
-                <button
-                  onClick={async () => {
-                    setProbingModelIds((prev) => new Set(prev).add(m.id));
-                    try {
-                      await probeModelCapabilities(m.id);
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error ? error.message : t("providerEdit.probeFailed"),
-                      );
-                    } finally {
-                      setProbingModelIds((prev) => {
-                        const next = new Set(prev);
-                        next.delete(m.id);
-                        return next;
-                      });
-                    }
-                  }}
-                  disabled={probingModelIds.has(m.id)}
-                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60 disabled:opacity-40"
-                  style={{ backgroundColor: "var(--muted)", color: "var(--primary)" }}
-                >
-                  {probingModelIds.has(m.id) ? (
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                  ) : (
-                    <IoPulseOutline size={12} />
-                  )}
-                  {t("providerEdit.probe")}
-                </button>
+                {m.outputModalities.includes("text") && (
+                  <button
+                    onClick={async () => {
+                      setProbingModelIds((prev) => new Set(prev).add(m.id));
+                      try {
+                        await probeModelCapabilities(m.id);
+                      } catch (error) {
+                        toast.error(
+                          error instanceof Error ? error.message : t("providerEdit.probeFailed"),
+                        );
+                      } finally {
+                        setProbingModelIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(m.id);
+                          return next;
+                        });
+                      }
+                    }}
+                    disabled={probingModelIds.has(m.id)}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60 disabled:opacity-40"
+                    style={{ backgroundColor: "var(--muted)", color: "var(--primary)" }}
+                  >
+                    {probingModelIds.has(m.id) ? (
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    ) : (
+                      <IoPulseOutline size={12} />
+                    )}
+                    {t("providerEdit.probe")}
+                  </button>
+                )}
               </div>
               <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-                <span>
-                  {t("providerEdit.contextWindow", {
-                    value: formatTokenLimit(m.maxContextLength),
-                  })}
-                </span>
-                {m.maxOutputTokens !== undefined && (
+                {m.outputModalities.includes("text") && (
+                  <span>
+                    {t("providerEdit.contextWindow", {
+                      value: formatTokenLimit(m.maxContextLength),
+                    })}
+                  </span>
+                )}
+                {m.outputModalities.includes("text") && m.maxOutputTokens !== undefined && (
                   <span>
                     {t("providerEdit.maxOutputTokens", {
                       value: formatTokenLimit(m.maxOutputTokens),

@@ -109,8 +109,8 @@ export default function App() {
             const { importBackupFromString } = await import("./services/backup");
             const result = await importBackupFromString(data);
             if (result.success) {
-              useProviderStore.getState().loadFromStorage();
               useSettingsStore.getState().loadFromStorage();
+              useProviderStore.getState().loadFromStorage();
               useIdentityStore.getState().loadFromStorage();
               useMcpStore.getState().loadFromStorage();
               appAlert(i18n.t("settings.importSuccess", result.counts!));

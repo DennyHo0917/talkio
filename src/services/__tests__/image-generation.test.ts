@@ -1,33 +1,66 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Model, Provider } from "../../types";
 
 const { appFetch } = vi.hoisted(() => ({ appFetch: vi.fn() }));
-
 vi.mock("../../lib/http", () => ({ appFetch }));
 
-const settings = {
-  imageBaseUrl: "https://gateway.test/v1",
-  imageApiKey: "test-key",
-  imageModel: "gpt-image-1",
+const provider: Provider = {
+  id: "provider-1",
+  name: "Gateway",
+  type: "openai",
+  apiFormat: "chat-completions",
+  baseUrl: "https://gateway.test/v1",
+  apiKey: "test-key",
+  customHeaders: [],
+  enabled: true,
+  status: "connected",
+  createdAt: "2026-01-01T00:00:00.000Z",
 };
+const model: Model = {
+  id: "image-model-1",
+  providerId: provider.id,
+  modelId: "gpt-image-1",
+  displayName: "GPT Image 1",
+  avatar: null,
+  capabilities: { vision: false, toolCall: false, reasoning: false, streaming: false },
+  inputModalities: ["text"],
+  outputModalities: ["image"],
+  imageGenerationApi: "openai-compatible",
+  capabilitiesVerified: true,
+  maxContextLength: 0,
+  enabled: true,
+};
+const providerState = { providers: [provider], models: [model] };
+vi.mock("../../stores/provider-store", () => ({
+  useProviderStore: { getState: () => providerState },
+}));
+
+const settings = { defaultImageModelId: model.id };
 vi.mock("../../stores/settings-store", () => ({
   useSettingsStore: { getState: () => ({ settings }) },
 }));
 
-function jsonResponse(body: unknown) {
-  return { ok: true, status: 200, json: async () => body };
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 describe("image generation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.assign(settings, {
-      imageBaseUrl: "https://gateway.test/v1",
-      imageApiKey: "test-key",
-      imageModel: "gpt-image-1",
-    });
+    providerState.providers.splice(0, providerState.providers.length, provider);
+    providerState.models.splice(0, providerState.models.length, model);
+    provider.profileId = undefined;
+    provider.enabled = true;
+    model.enabled = true;
+    model.outputModalities = ["image"];
+    model.imageGenerationApi = "openai-compatible";
+    settings.defaultImageModelId = model.id;
   });
 
-  it("posts the prompt to /images/generations and returns a data URL", async () => {
+  it("uses the AI SDK image model and returns a data URL", async () => {
     appFetch.mockResolvedValue(jsonResponse({ data: [{ b64_json: "QUJD" }] }));
     const { generateImages } = await import("../image-generation");
 
@@ -36,7 +69,7 @@ describe("image generation", () => {
     ]);
     const [url, init] = appFetch.mock.calls[0];
     expect(url).toBe("https://gateway.test/v1/images/generations");
-    expect(JSON.parse(init.body)).toEqual({
+    expect(JSON.parse(init.body)).toMatchObject({
       model: "gpt-image-1",
       prompt: "a red cube",
       n: 1,
@@ -44,40 +77,84 @@ describe("image generation", () => {
     });
   });
 
-  it("downloads hosted images when the gateway answers with a url", async () => {
+  it("selects a requested provider/model key", async () => {
+    appFetch.mockResolvedValue(jsonResponse({ data: [{ b64_json: "QUJD" }] }));
+    const { generateImages } = await import("../image-generation");
+
+    await generateImages({ prompt: "a red cube", model: "Gateway/gpt-image-1" });
+    expect(appFetch).toHaveBeenCalledOnce();
+  });
+
+  it("routes requests between multiple configured image models", async () => {
+    const secondModel: Model = {
+      ...model,
+      id: "image-model-2",
+      modelId: "dall-e-3",
+      displayName: "DALL-E 3",
+    };
+    providerState.models.push(secondModel);
+    appFetch.mockResolvedValue(jsonResponse({ data: [{ b64_json: "QUJD" }] }));
+    const { generateImages } = await import("../image-generation");
+
+    await generateImages({ prompt: "a blue cube", model: "Gateway/dall-e-3" });
+
+    expect(JSON.parse(appFetch.mock.calls[0][1].body)).toMatchObject({ model: "dall-e-3" });
+  });
+
+  it("falls back when the configured default model is unavailable", async () => {
+    settings.defaultImageModelId = "missing-model";
+    const { getDefaultImageModel } = await import("../image-generation");
+
+    expect(getDefaultImageModel()?.id).toBe(model.id);
+  });
+
+  it("downloads hosted image responses through the SDK provider", async () => {
     appFetch
       .mockResolvedValueOnce(jsonResponse({ data: [{ url: "https://cdn.test/a.webp" }] }))
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "image/webp" }),
-        arrayBuffer: async () => new Uint8Array([65, 66, 67]).buffer,
-      });
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([65, 66, 67]), {
+          status: 200,
+          headers: { "Content-Type": "image/webp" },
+        }),
+      );
     const { generateImages } = await import("../image-generation");
 
     expect(await generateImages({ prompt: "a red cube" })).toEqual(["data:image/webp;base64,QUJD"]);
   });
 
-  it("surfaces the endpoint error instead of returning nothing", async () => {
-    appFetch.mockResolvedValue({ ok: false, status: 503, text: async () => "model unavailable" });
-    const { generateImages } = await import("../image-generation");
-
-    await expect(generateImages({ prompt: "a red cube" })).rejects.toThrow(
-      "Image API Error 503: model unavailable",
+  it("surfaces endpoint errors", async () => {
+    appFetch.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            message: "bad key",
+            type: "invalid_request_error",
+            param: null,
+            code: "invalid_api_key",
+          },
+        },
+        401,
+      ),
     );
-  });
-
-  it("rejects an empty result rather than reporting success", async () => {
-    appFetch.mockResolvedValue(jsonResponse({ data: [] }));
     const { generateImages } = await import("../image-generation");
 
-    await expect(generateImages({ prompt: "a red cube" })).rejects.toThrow("returned no images");
+    await expect(generateImages({ prompt: "a red cube" })).rejects.toThrow(/401|bad key/i);
   });
 
-  it("is unconfigured until base URL, key and model are all set", async () => {
+  it("rejects invalid dimensions before sending a request", async () => {
+    const { generateImages } = await import("../image-generation");
+
+    await expect(generateImages({ prompt: "a red cube", size: "large" })).rejects.toThrow(
+      "Invalid image size",
+    );
+    expect(appFetch).not.toHaveBeenCalled();
+  });
+
+  it("is unconfigured without an enabled image-output model", async () => {
     const { isImageGenerationConfigured } = await import("../image-generation");
     expect(isImageGenerationConfigured()).toBe(true);
-    settings.imageApiKey = "";
+    model.outputModalities = ["text"];
+    model.imageGenerationApi = undefined;
     expect(isImageGenerationConfigured()).toBe(false);
   });
 });
@@ -85,11 +162,13 @@ describe("image generation", () => {
 describe("generate_image tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.assign(settings, {
-      imageBaseUrl: "https://gateway.test/v1",
-      imageApiKey: "test-key",
-      imageModel: "gpt-image-1",
-    });
+    providerState.providers.splice(0, providerState.providers.length, provider);
+    providerState.models.splice(0, providerState.models.length, model);
+    provider.profileId = undefined;
+    provider.enabled = true;
+    model.enabled = true;
+    model.outputModalities = ["image"];
+    model.imageGenerationApi = "openai-compatible";
   });
 
   it("returns images out of band, never inside the tool result text", async () => {
@@ -102,21 +181,52 @@ describe("generate_image tool", () => {
     expect(result?.content).not.toContain("QUJD");
   });
 
-  it("reports the failure instead of pretending an image was drawn", async () => {
-    appFetch.mockResolvedValue({ ok: false, status: 401, text: async () => "bad key" });
+  it("reports failures instead of pretending an image was drawn", async () => {
+    appFetch.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            message: "bad key",
+            type: "invalid_request_error",
+            param: null,
+            code: "invalid_api_key",
+          },
+        },
+        401,
+      ),
+    );
     const { executeBuiltInTool } = await import("../built-in-tools");
 
     const result = await executeBuiltInTool("generate_image", { prompt: "a red cube" });
     expect(result?.success).toBe(false);
-    expect(result?.error).toContain("401");
+    expect(result?.error).toMatch(/401|bad key/i);
   });
 
-  it("is offered to the model only once an image endpoint is configured", async () => {
+  it("offers configured image models in the tool schema", async () => {
     const { getBuiltInToolDefs } = await import("../built-in-tools");
-    const names = () => getBuiltInToolDefs().map((d) => d.function.name);
+    const generateImage = getBuiltInToolDefs().find(
+      (definition) => definition.function.name === "generate_image",
+    );
+    const modelProperty = (generateImage?.function.parameters.properties as Record<string, any>)
+      .model;
 
-    expect(names()).toContain("generate_image");
-    settings.imageModel = "";
-    expect(names()).not.toContain("generate_image");
+    expect(modelProperty.enum).toEqual(["Gateway/gpt-image-1"]);
+    model.outputModalities = ["text"];
+    model.imageGenerationApi = undefined;
+    expect(
+      getBuiltInToolDefs().some((definition) => definition.function.name === "generate_image"),
+    ).toBe(false);
+  });
+
+  it("does not expose chat-native OpenRouter image output as an image model", async () => {
+    const { getAvailableImageModels } = await import("../image-generation");
+    provider.profileId = "openrouter";
+    model.outputModalities = ["text", "image"];
+    model.imageGenerationApi = undefined;
+
+    expect(getAvailableImageModels()).toEqual([]);
+    expect(model.outputModalities).toContain("image");
+
+    provider.profileId = undefined;
   });
 });

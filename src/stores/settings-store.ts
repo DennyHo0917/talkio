@@ -28,6 +28,8 @@ export interface AppSettings {
   imageBaseUrl: string;
   imageApiKey: string;
   imageModel: string;
+  /** Internal Model.id used when generate_image does not request a specific model. */
+  defaultImageModelId: string;
 }
 
 interface SettingsState {
@@ -52,11 +54,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageBaseUrl: "https://api.openai.com/v1",
   imageApiKey: "",
   imageModel: "gpt-image-1",
+  defaultImageModelId: "",
 };
 
 const SETTINGS_KEY = "settings";
 
 function applyTheme(theme: AppSettings["theme"]) {
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
   if (theme === "dark") {
     root.classList.add("dark");

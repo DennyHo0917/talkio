@@ -14,7 +14,11 @@ import {
 import { gitExecute, isGitWriteCommand } from "./git-tools";
 import { appConfirm } from "../components/shared/ConfirmDialogProvider";
 import { isDesktop } from "../lib/platform";
-import { generateImages, isImageGenerationConfigured } from "./image-generation";
+import {
+  generateImages,
+  getAvailableImageModels,
+  isImageGenerationConfigured,
+} from "./image-generation";
 import { persistGeneratedImages } from "./image-store";
 
 export interface ToolResult {
@@ -84,8 +88,13 @@ async function handleGenerateImage(args: Record<string, unknown>): Promise<ToolR
   const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
   if (!prompt) return failResult("Missing required parameter: prompt");
   const size = typeof args.size === "string" && args.size ? args.size : undefined;
+  const aspectRatio =
+    typeof args.aspect_ratio === "string" && args.aspect_ratio ? args.aspect_ratio : undefined;
+  const model = typeof args.model === "string" && args.model ? args.model : undefined;
   try {
-    const images = await persistGeneratedImages(await generateImages({ prompt, size }));
+    const images = await persistGeneratedImages(
+      await generateImages({ prompt, size, aspectRatio, model }),
+    );
     return {
       success: true,
       content: `Generated ${images.length} image(s) from the prompt. They are already displayed to the user; do not describe the pixels you cannot see.`,
@@ -368,6 +377,14 @@ export const BUILT_IN_TOOLS: BuiltInToolDef[] = [
           description:
             "Optional image size, e.g. '1024x1024' (square), '1536x1024' (landscape), '1024x1536' (portrait). Omit for the model default.",
         },
+        aspect_ratio: {
+          type: "string",
+          description: "Optional aspect ratio, e.g. '1:1', '16:9', or '9:16'.",
+        },
+        model: {
+          type: "string",
+          description: "Optional image model. Omit to use the configured default.",
+        },
       },
       required: ["prompt"],
     },
@@ -476,17 +493,30 @@ export async function executeBuiltInTool(
  * Get tool definitions formatted for the OpenAI API tools parameter.
  */
 export function getBuiltInToolDefs(context?: ToolContext) {
+  const imageModels = getAvailableImageModels();
   return BUILT_IN_TOOLS.filter(
     (t) =>
       (!t.requiresWorkspace || !!context?.workspaceDir) &&
       (!t.desktopOnly || isDesktop) &&
       (!t.requiresImageConfig || isImageGenerationConfigured()),
-  ).map((t) => ({
-    type: "function" as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    },
-  }));
+  ).map((t) => {
+    const parameters =
+      t.name === "generate_image" && imageModels.length > 0
+        ? {
+            ...t.parameters,
+            properties: {
+              ...(t.parameters.properties as Record<string, unknown>),
+              model: {
+                type: "string",
+                enum: imageModels.map((model) => model.selectionKey),
+                description: "Optional image model. Omit to use the configured default.",
+              },
+            },
+          }
+        : t.parameters;
+    return {
+      type: "function" as const,
+      function: { name: t.name, description: t.description, parameters },
+    };
+  });
 }

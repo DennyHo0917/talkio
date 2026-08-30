@@ -35,6 +35,7 @@ const isMac = navigator.userAgent.toLowerCase().includes("mac");
 
 interface ChatInputProps {
   onSend: (text: string, mentionedParticipantIds?: string[], images?: string[]) => void;
+  imageOnly?: boolean;
   isGenerating: boolean;
   onStop: () => void;
   placeholder?: string;
@@ -57,6 +58,7 @@ interface ChatInputProps {
 
 export const ChatInput = memo(function ChatInput({
   onSend,
+  imageOnly = false,
   isGenerating,
   onStop,
   placeholder,
@@ -81,9 +83,10 @@ export const ChatInput = memo(function ChatInput({
   const basePlaceholder = placeholder ?? t("chat.message");
   const sendKey = enterToSend ? "Enter" : isMac ? "⌘Enter" : "Ctrl+Enter";
   const newLineKey = enterToSend ? "Shift+Enter" : "Enter";
+  const modePlaceholder = imageOnly ? t("chat.imagePrompt") : basePlaceholder;
   const resolvedPlaceholder = isMobile
-    ? basePlaceholder
-    : `${basePlaceholder}  (${sendKey} · ${newLineKey} ${t("chat.newLine")})`;
+    ? modePlaceholder
+    : `${modePlaceholder}  (${sendKey} · ${newLineKey} ${t("chat.newLine")})`;
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
@@ -166,6 +169,16 @@ export const ChatInput = memo(function ChatInput({
     const hasImages = attachedImages.length > 0;
     const hasFiles = attachedFiles.length > 0;
     if ((!trimmed && !hasImages && !hasFiles) || isGenerating) return;
+    if (imageOnly) {
+      if (!trimmed) return;
+      onSend(trimmed);
+      setText("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        if (!isMobile) textareaRef.current.focus();
+      }
+      return;
+    }
     let mentionedIds: string[] | undefined;
     if (isGroup) {
       const ids = extractMentionedParticipantIds(trimmed, participantNames);
@@ -207,8 +220,10 @@ export const ChatInput = memo(function ChatInput({
     isGenerating,
     onSend,
     isGroup,
+    isMobile,
     participantNames,
     anyTargetModelSupportsVision,
+    imageOnly,
   ]);
 
   const handleKeyDown = useCallback(
@@ -403,6 +418,11 @@ export const ChatInput = memo(function ChatInput({
   // Merge external files from drag-drop in ChatView
   useEffect(() => {
     if (!externalFiles) return;
+    if (imageOnly) {
+      void appAlert(t("chat.imageModelAttachments"));
+      onExternalFilesConsumed?.();
+      return;
+    }
     if (externalFiles.images.length > 0) {
       setAttachedImages((prev) => [...prev, ...externalFiles.images].slice(0, 4));
     }
@@ -410,7 +430,7 @@ export const ChatInput = memo(function ChatInput({
       setAttachedFiles((prev) => [...prev, ...externalFiles.files].slice(0, 4));
     }
     onExternalFilesConsumed?.();
-  }, [externalFiles, onExternalFilesConsumed]);
+  }, [externalFiles, imageOnly, onExternalFilesConsumed, t]);
 
   return (
     <div
@@ -711,6 +731,7 @@ export const ChatInput = memo(function ChatInput({
                   }}
                   onKeyDown={handleKeyDown}
                   onPaste={(e) => {
+                    if (imageOnly) return;
                     const items = e.clipboardData?.items;
                     if (!items) return;
                     for (const item of items) {
@@ -748,13 +769,16 @@ export const ChatInput = memo(function ChatInput({
                   <button
                     onClick={handleSend}
                     disabled={
-                      !text.trim() && attachedImages.length === 0 && attachedFiles.length === 0
+                      imageOnly
+                        ? !text.trim()
+                        : !text.trim() && attachedImages.length === 0 && attachedFiles.length === 0
                     }
                     className="my-1.5 ml-1.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-opacity active:opacity-70"
                     style={{
                       backgroundColor: "var(--primary)",
                       opacity:
-                        text.trim() || attachedImages.length > 0 || attachedFiles.length > 0
+                        text.trim() ||
+                        (!imageOnly && (attachedImages.length > 0 || attachedFiles.length > 0))
                           ? 1
                           : 0.3,
                     }}
@@ -779,7 +803,7 @@ export const ChatInput = memo(function ChatInput({
             <button
               onClick={handleAttach}
               className={`flex items-center justify-center rounded-full active:opacity-60 ${isMobile ? "h-10 w-10" : "h-8 w-8"}`}
-              disabled={isGenerating}
+              disabled={isGenerating || imageOnly}
             >
               {isMobile ? (
                 <Image

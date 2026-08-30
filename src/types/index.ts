@@ -43,6 +43,10 @@ export interface ModelCapabilities {
   streaming: boolean;
 }
 
+export type ModelInputModality = "text" | "image" | "audio" | "video" | "file";
+export type ModelOutputModality = "text" | "image" | "audio";
+export type ImageGenerationApi = "openai" | "openai-compatible" | "google";
+
 export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type ReasoningOption =
@@ -84,6 +88,10 @@ export interface Model {
   displayName: string;
   avatar: string | null;
   capabilities: ModelCapabilities;
+  inputModalities: ModelInputModality[];
+  outputModalities: ModelOutputModality[];
+  /** Independent image generation API exposed through an AI SDK ImageModel. */
+  imageGenerationApi?: ImageGenerationApi;
   capabilitiesVerified: boolean;
   maxContextLength: number;
   maxOutputTokens?: number;

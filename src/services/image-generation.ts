@@ -1,83 +1,236 @@
 /**
- * OpenAI-compatible image generation.
+ * Provider-backed image generation through the Vercel AI SDK.
  *
- * Image models live behind `/images/generations`, not `/chat/completions`, so
- * they cannot be driven by the chat adapters — a gateway asked to run
- * `gpt-image-2` as a chat model simply refuses. This module is the one caller of
- * that endpoint; the `generate_image` built-in tool is what exposes it to a
- * conversation.
+ * Image models are ordinary Talkio models with an explicit independent image
+ * generation API. Multiple providers/models can coexist; callers may select
+ * one by its stable model id or by the human-readable `provider/model` key.
  */
+import { generateImage as generateImageWithSdk, type ImageModel } from "ai";
+import { createGoogle } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { appFetch } from "../lib/http";
+import { useProviderStore } from "../stores/provider-store";
 import { useSettingsStore } from "../stores/settings-store";
+import type { Model, Provider } from "../types";
+import { buildProviderHeaders } from "./provider-headers";
 
-/** Image endpoint config, or null when the user has not set one up. */
-function readConfig(): { baseUrl: string; apiKey: string; model: string } | null {
-  const { imageBaseUrl, imageApiKey, imageModel } = useSettingsStore.getState().settings;
-  if (!imageBaseUrl.trim() || !imageApiKey.trim() || !imageModel.trim()) return null;
-  return { baseUrl: imageBaseUrl.trim(), apiKey: imageApiKey.trim(), model: imageModel.trim() };
+export interface AvailableImageModel {
+  id: string;
+  modelId: string;
+  displayName: string;
+  providerId: string;
+  providerName: string;
+  selectionKey: string;
 }
 
-export function isImageGenerationConfigured(): boolean {
-  return readConfig() !== null;
-}
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-/** Some gateways answer with a hosted URL instead of inline base64. */
-async function fetchAsDataUrl(url: string, signal?: AbortSignal): Promise<string> {
-  const res = await appFetch(url, { signal });
-  if (!res.ok) throw new Error(`Cannot download generated image: HTTP ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const mime = res.headers.get("content-type") ?? "image/png";
-  return `data:${mime};base64,${toBase64(bytes)}`;
+interface ResolvedImageModel extends AvailableImageModel {
+  model: Model;
+  provider: Provider;
 }
 
 export interface GenerateImagesParams {
   prompt: string;
+  model?: string;
   size?: string;
+  aspectRatio?: string;
+  n?: number;
   signal?: AbortSignal;
 }
 
-/**
- * Generate images and return them as `data:` URLs.
- *
- * Throws when the endpoint is unconfigured, the request fails, or the response
- * carries no usable image — a silent empty result would look to the model like
- * a successful call that produced nothing.
- */
-export async function generateImages(params: GenerateImagesParams): Promise<string[]> {
-  const config = readConfig();
-  if (!config) throw new Error("Image generation is not configured in settings");
-
-  const body: Record<string, unknown> = { model: config.model, prompt: params.prompt, n: 1 };
-  if (params.size) body.size = params.size;
-
-  const res = await appFetch(`${config.baseUrl.replace(/\/+$/, "")}/images/generations`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: params.signal,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Image API Error ${res.status}: ${text}`);
+function authParts(headers: Record<string, string>): {
+  apiKey?: string;
+  headers: Record<string, string>;
+} {
+  const passthrough: Record<string, string> = {};
+  let apiKey: string | undefined;
+  for (const [name, value] of Object.entries(headers)) {
+    const lower = name.toLowerCase();
+    if (lower === "authorization" && value.startsWith("Bearer ")) {
+      apiKey = value.slice(7);
+    } else if (lower === "x-api-key" || lower === "x-goog-api-key" || lower === "api-key") {
+      apiKey ??= value;
+    } else {
+      passthrough[name] = value;
+    }
   }
+  return { apiKey, headers: passthrough };
+}
 
-  const data = (await res.json()) as {
-    data?: Array<{ b64_json?: string; url?: string }>;
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function createSdkImageFetch(onMediaTypes: (mediaTypes: Array<string | undefined>) => void) {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const response = await appFetch(input, init);
+    if (!response.ok) return response;
+
+    let payload: { data?: Array<{ b64_json?: string; url?: string }> };
+    try {
+      payload = await response.clone().json();
+    } catch {
+      return response;
+    }
+    if (!payload.data?.some((item) => item.url && !item.b64_json)) return response;
+
+    const mediaTypes: Array<string | undefined> = [];
+    const data = await Promise.all(
+      payload.data.map(async (item, index) => {
+        if (item.b64_json || !item.url) return item;
+        const imageResponse = await appFetch(item.url, { signal: init?.signal });
+        if (!imageResponse.ok) {
+          throw new Error(`Cannot download generated image: HTTP ${imageResponse.status}`);
+        }
+        mediaTypes[index] = imageResponse.headers.get("content-type")?.split(";", 1)[0];
+        return {
+          ...item,
+          url: undefined,
+          b64_json: bytesToBase64(new Uint8Array(await imageResponse.arrayBuffer())),
+        };
+      }),
+    );
+    onMediaTypes(mediaTypes);
+
+    const headers = new Headers(response.headers);
+    headers.delete("content-encoding");
+    headers.delete("content-length");
+    headers.set("content-type", "application/json");
+    return new Response(JSON.stringify({ ...payload, data }), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   };
-  const items = data.data ?? [];
-  if (items.length === 0) throw new Error("Image API returned no images");
+}
 
-  const images: string[] = [];
-  for (const item of items) {
-    if (item.b64_json) images.push(`data:image/png;base64,${item.b64_json}`);
-    else if (item.url) images.push(await fetchAsDataUrl(item.url, params.signal));
-    else throw new Error("Image API returned an entry with neither b64_json nor url");
+function resolvedImageModels(): ResolvedImageModel[] {
+  const { providers, models } = useProviderStore.getState();
+  const enabledProviders = new Map(
+    providers
+      .filter((provider) => provider.enabled !== false)
+      .map((provider) => [provider.id, provider]),
+  );
+
+  return models.flatMap((model) => {
+    const provider = enabledProviders.get(model.providerId);
+    if (!provider || !model.enabled || !model.imageGenerationApi) return [];
+    return [
+      {
+        id: model.id,
+        modelId: model.modelId,
+        displayName: model.displayName,
+        providerId: provider.id,
+        providerName: provider.name,
+        selectionKey: `${provider.name}/${model.modelId}`,
+        model,
+        provider,
+      },
+    ];
+  });
+}
+
+export function getAvailableImageModels(): AvailableImageModel[] {
+  return resolvedImageModels().map(({ model: _model, provider: _provider, ...item }) => item);
+}
+
+export function isImageGenerationConfigured(): boolean {
+  return resolvedImageModels().length > 0;
+}
+
+export function getDefaultImageModel(): AvailableImageModel | undefined {
+  const available = resolvedImageModels();
+  const defaultId = useSettingsStore.getState().settings.defaultImageModelId;
+  const selected = available.find((item) => item.id === defaultId) ?? available[0];
+  if (!selected) return undefined;
+  const { model: _model, provider: _provider, ...item } = selected;
+  return item;
+}
+
+function resolveConfiguredModel(selection?: string): ResolvedImageModel {
+  const available = resolvedImageModels();
+  if (available.length === 0) throw new Error("No enabled image generation model is configured");
+
+  if (selection) {
+    const exact = available.find(
+      (item) => item.id === selection || item.selectionKey === selection,
+    );
+    if (exact) return exact;
+
+    const byModelId = available.filter((item) => item.modelId === selection);
+    if (byModelId.length === 1) return byModelId[0];
+    if (byModelId.length > 1) {
+      throw new Error(`Image model '${selection}' is ambiguous; specify provider/model`);
+    }
+    throw new Error(`Image model '${selection}' is not enabled or does not support image output`);
   }
-  return images;
+
+  const defaultId = useSettingsStore.getState().settings.defaultImageModelId;
+  return available.find((item) => item.id === defaultId) ?? available[0];
+}
+
+function createImageModel(
+  provider: Provider,
+  model: Model,
+  fetch: typeof globalThis.fetch,
+): ImageModel {
+  const baseURL = provider.baseUrl.replace(/\/+$/, "");
+  const auth = authParts(buildProviderHeaders(provider));
+
+  if (model.imageGenerationApi === "google") {
+    return createGoogle({ baseURL, apiKey: auth.apiKey, headers: auth.headers, fetch }).image(
+      model.modelId,
+    );
+  }
+  if (model.imageGenerationApi === "openai") {
+    return createOpenAI({ baseURL, apiKey: auth.apiKey, headers: auth.headers, fetch }).imageModel(
+      model.modelId,
+    );
+  }
+  if (model.imageGenerationApi !== "openai-compatible") {
+    throw new Error(`Model '${model.modelId}' does not expose a supported image generation API`);
+  }
+  return createOpenAICompatible({
+    name: "openai-compatible",
+    baseURL,
+    apiKey: auth.apiKey,
+    headers: auth.headers,
+    fetch,
+  }).imageModel(model.modelId);
+}
+
+function imageSize(value?: string): `${number}x${number}` | undefined {
+  if (!value) return undefined;
+  if (!/^\d+x\d+$/.test(value)) throw new Error(`Invalid image size '${value}'`);
+  return value as `${number}x${number}`;
+}
+
+function imageAspectRatio(value?: string): `${number}:${number}` | undefined {
+  if (!value) return undefined;
+  if (!/^\d+:\d+$/.test(value)) throw new Error(`Invalid image aspect ratio '${value}'`);
+  return value as `${number}:${number}`;
+}
+
+export async function generateImages(params: GenerateImagesParams): Promise<string[]> {
+  const selected = resolveConfiguredModel(params.model);
+  let normalizedMediaTypes: Array<string | undefined> = [];
+  const fetch = createSdkImageFetch((mediaTypes) => {
+    normalizedMediaTypes = mediaTypes;
+  }) as typeof globalThis.fetch;
+  const result = await generateImageWithSdk({
+    model: createImageModel(selected.provider, selected.model, fetch),
+    prompt: params.prompt,
+    n: params.n,
+    size: imageSize(params.size),
+    aspectRatio: imageAspectRatio(params.aspectRatio),
+    abortSignal: params.signal,
+  });
+
+  if (result.images.length === 0) throw new Error("Image API returned no images");
+  return result.images.map(
+    (image, index) =>
+      `data:${normalizedMediaTypes[index] || image.mediaType || "image/png"};base64,${image.base64}`,
+  );
 }

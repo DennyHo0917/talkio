@@ -153,7 +153,9 @@ function toolResultText(output: unknown): string {
 
 /** Build per-provider options (Gemini image output). Reasoning goes via the top-level setting. */
 function buildProviderOptions(request: ParticipantRequest): Record<string, unknown> | undefined {
-  if (request.apiFormat === "gemini-generate-content" && supportsImageOutput(request.modelId)) {
+  const imageOutput =
+    request.outputModalities?.includes("image") || supportsImageOutput(request.modelId);
+  if (request.apiFormat === "gemini-generate-content" && imageOutput) {
     return { google: { responseModalities: ["TEXT", "IMAGE"] } };
   }
   return undefined;

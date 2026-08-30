@@ -288,6 +288,7 @@ export async function generateForParticipant(
         baseUrl,
         headers,
         modelId: model.modelId,
+        outputModalities: model.outputModalities,
         messages: apiMessages,
         identity,
         reasoningEffort,

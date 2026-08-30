@@ -50,6 +50,8 @@ export function createModelFromProviderPayload(
     avatar: null,
     enabled: true,
     capabilities: defaultCapabilities(),
+    inputModalities: ["text"],
+    outputModalities: ["text"],
     capabilitiesVerified: false,
     maxContextLength: contextLength ?? 128000,
   } as Model;

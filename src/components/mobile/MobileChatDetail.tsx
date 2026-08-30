@@ -855,6 +855,7 @@ export function MobileChatDetail({
         onSelect={handleModelPickerSelect}
         multiSelect={modelPickerMode === "add"}
         onMultiSelect={handleMultiModelSelect}
+        includeImageModels={modelPickerMode !== "add"}
       />
 
       {/* Messages + Input */}

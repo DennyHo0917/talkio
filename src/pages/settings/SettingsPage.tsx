@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import i18n from "../../i18n";
 import { useProviderStore } from "../../stores/provider-store";
+import { getDefaultImageModel } from "../../services/image-generation";
 import { useChatStore } from "../../stores/chat-store";
 import { useSettingsStore, type AppSettings } from "../../stores/settings-store";
 import { useConfirm, appAlert } from "../../components/shared/ConfirmDialogProvider";
@@ -115,6 +116,7 @@ export function SettingsPage({
   const providers = useProviderStore(
     (s: ReturnType<typeof useProviderStore.getState>) => s.providers,
   );
+  const models = useProviderStore((s: ReturnType<typeof useProviderStore.getState>) => s.models);
   const settings = useSettingsStore(
     (s: ReturnType<typeof useSettingsStore.getState>) => s.settings,
   );
@@ -192,6 +194,10 @@ export function SettingsPage({
       : settings.language === "en"
         ? t("settings.langEn")
         : t("settings.langSystem");
+  const defaultImageModel = useMemo(
+    () => getDefaultImageModel(),
+    [models, providers, settings.defaultImageModelId],
+  );
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -284,7 +290,7 @@ export function SettingsPage({
             iconColor="#ec4899"
             iconBg="rgba(236,72,153,0.1)"
             label={t("settings.imageProvider")}
-            detail={settings.imageApiKey ? settings.imageModel : t("settings.imageNotConfigured")}
+            detail={defaultImageModel?.displayName ?? t("settings.imageNotConfigured")}
             onPress={() =>
               push({
                 id: "image-settings",
@@ -548,8 +554,8 @@ export function SettingsPage({
               const result = await pickAndImportBackup();
               if (!result) return;
               if (result.success) {
-                useProviderStore.getState().loadFromStorage();
                 useSettingsStore.getState().loadFromStorage();
+                useProviderStore.getState().loadFromStorage();
                 await appAlert(t("settings.importSuccess", result.counts!));
                 window.location.reload();
               } else {

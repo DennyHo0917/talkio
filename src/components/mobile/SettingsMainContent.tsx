@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMobileNav } from "../../contexts/MobileNavContext";
 import { useProviderStore } from "../../stores/provider-store";
+import { getDefaultImageModel } from "../../services/image-generation";
 import { useSettingsStore, type AppSettings } from "../../stores/settings-store";
 import { SettingsRow, SectionHeader } from "../../pages/settings/SettingsPage";
 import { createBackup, downloadBackup, pickAndImportBackup } from "../../services/backup";
@@ -26,6 +28,7 @@ export function SettingsMainContent() {
   const { prompt: promptBackupSecrets, dialog: backupSecretsDialog } = useBackupSecretsChoice();
   const mobileNav = useMobileNav();
   const providers = useProviderStore((s) => s.providers);
+  const models = useProviderStore((s) => s.models);
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
@@ -41,6 +44,10 @@ export function SettingsMainContent() {
       : settings.language === "en"
         ? t("settings.langEn")
         : t("settings.langSystem");
+  const defaultImageModel = useMemo(
+    () => getDefaultImageModel(),
+    [models, providers, settings.defaultImageModelId],
+  );
 
   return (
     <div className="h-full overflow-y-auto" style={{ backgroundColor: "var(--background)" }}>
@@ -83,7 +90,7 @@ export function SettingsMainContent() {
           iconColor="#ec4899"
           iconBg="rgba(236,72,153,0.1)"
           label={t("settings.imageProvider")}
-          detail={settings.imageApiKey ? settings.imageModel : t("settings.imageNotConfigured")}
+          detail={defaultImageModel?.displayName ?? t("settings.imageNotConfigured")}
           onPress={() => mobileNav?.pushSettingsImage()}
         />
         <SettingsRow
@@ -221,8 +228,8 @@ export function SettingsMainContent() {
             const result = await pickAndImportBackup();
             if (!result) return;
             if (result.success) {
-              useProviderStore.getState().loadFromStorage();
               useSettingsStore.getState().loadFromStorage();
+              useProviderStore.getState().loadFromStorage();
               await appAlert(t("settings.importSuccess", result.counts!));
               window.location.reload();
             } else {

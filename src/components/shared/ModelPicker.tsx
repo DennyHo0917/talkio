@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Check, CheckCircle, Circle } from "lucide-react";
+import { Search, Check, CheckCircle, Circle, Image as ImageIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useProviderStore } from "../../stores/provider-store";
 import { getAvatarProps } from "../../lib/avatar-utils";
@@ -14,6 +14,7 @@ interface ModelPickerProps {
   selectedModelId?: string;
   multiSelect?: boolean;
   onMultiSelect?: (modelIds: string[]) => void;
+  includeImageModels?: boolean;
 }
 
 export function ModelPicker({
@@ -23,12 +24,14 @@ export function ModelPicker({
   selectedModelId,
   multiSelect,
   onMultiSelect,
+  includeImageModels = false,
 }: ModelPickerProps) {
   const { t } = useTranslation();
   const models = useProviderStore((s) => s.models);
   const getProviderById = useProviderStore((s) => s.getProviderById);
   const providers = useProviderStore((s) => s.providers);
   const getEnabledModels = useProviderStore((s) => s.getEnabledModels);
+  const getEnabledConversationModels = useProviderStore((s) => s.getEnabledConversationModels);
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -55,7 +58,10 @@ export function ModelPicker({
     onClose();
   }, [selectedIds, onMultiSelect, onClose]);
 
-  const enabledModels = useMemo(() => getEnabledModels(), [models, providers]);
+  const enabledModels = useMemo(
+    () => (includeImageModels ? getEnabledConversationModels() : getEnabledModels()),
+    [getEnabledConversationModels, getEnabledModels, includeImageModels, models, providers],
+  );
 
   const filtered = useMemo(() => {
     if (!search.trim()) return enabledModels;
@@ -110,6 +116,9 @@ export function ModelPicker({
                 </div>
                 {section.data.map((model, idx) => {
                   const { color: mColor, initials: mInitials } = getAvatarProps(model.displayName);
+                  const imageOnly =
+                    model.outputModalities.includes("image") &&
+                    !model.outputModalities.includes("text");
                   const isSelected = multiSelect
                     ? selectedIds.has(model.id)
                     : model.id === selectedModelId;
@@ -143,8 +152,15 @@ export function ModelPicker({
                         <p className="text-foreground truncate text-[16px] font-medium">
                           {model.displayName}
                         </p>
-                        <p className="text-muted-foreground truncate text-[13px]">
-                          {model.modelId}
+                        <p className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
+                          <span className="truncate">{model.modelId}</span>
+                          {imageOnly && (
+                            <ImageIcon
+                              size={13}
+                              className="flex-shrink-0"
+                              aria-label={t("models.imageModel")}
+                            />
+                          )}
                         </p>
                       </div>
                       {multiSelect ? (

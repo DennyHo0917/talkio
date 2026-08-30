@@ -6,7 +6,7 @@
  * coding agent, an ACP agent, an A2A remote agent, or a durable task runtime.
  */
 import type { ModelMessage } from "ai";
-import type { ApiFormat } from "../../types";
+import type { ApiFormat, ModelOutputModality } from "../../types";
 import type { GenerationEvent } from "./events";
 
 export interface ParticipantRequest {
@@ -15,6 +15,7 @@ export interface ParticipantRequest {
   baseUrl: string;
   headers: Record<string, string>;
   modelId: string;
+  outputModalities?: ModelOutputModality[];
   /** Standard AI SDK messages (a leading system message is lifted to `system`). */
   messages: ModelMessage[];
   toolDefs?: unknown[];

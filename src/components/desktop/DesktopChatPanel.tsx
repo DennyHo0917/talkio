@@ -939,6 +939,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
         open={showModelPicker}
         onClose={() => setShowModelPicker(false)}
         onSelect={handleModelPickerSelect}
+        includeImageModels
       />
 
       <AddMemberPicker

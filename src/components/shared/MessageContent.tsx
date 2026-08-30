@@ -62,12 +62,16 @@ export const MessageContent = memo(function MessageContent({
       )}
 
       {/* Fallback for empty non-streaming, non-error messages (e.g. legacy data) */}
-      {!streaming && !hasError && !message.content && !message.reasoningContent && (
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <AlertCircle size={14} className="flex-shrink-0 opacity-60" />
-          <span>Empty response from model</span>
-        </div>
-      )}
+      {!streaming &&
+        !hasError &&
+        !message.content &&
+        !message.reasoningContent &&
+        message.generatedImages.length === 0 && (
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
+            <AlertCircle size={14} className="flex-shrink-0 opacity-60" />
+            <span>Empty response from model</span>
+          </div>
+        )}
     </div>
   );
 });

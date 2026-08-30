@@ -293,6 +293,7 @@ function DesktopConversationList() {
         open={showModelPicker}
         onClose={() => setShowModelPicker(false)}
         onSelect={handleModelSelect}
+        includeImageModels
       />
 
       {/* Search */}

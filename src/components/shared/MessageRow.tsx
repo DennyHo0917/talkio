@@ -343,7 +343,6 @@ export const MessageRow = memo(function MessageRow({
   const isUser = message.role === "user";
   const isStreaming = message.status === MessageStatus.STREAMING;
   const rawContent = (message.content || "").trimEnd();
-
   // Parse out <file> tags: extract names for chips, return clean user text
   const { displayText: content, fileNames } = useMemo(() => {
     const names: string[] = [];
@@ -356,6 +355,14 @@ export const MessageRow = memo(function MessageRow({
     );
     return { displayText: cleaned.trimStart(), fileNames: names };
   }, [rawContent]);
+  const hasToolCalls = (message.toolCalls?.length ?? 0) > 0;
+  const hasGeneratedImages = message.generatedImages.length > 0;
+  const showAssistantBubble =
+    !!content ||
+    !!message.reasoningContent ||
+    isStreaming ||
+    message.status === MessageStatus.ERROR ||
+    (!hasToolCalls && !hasGeneratedImages);
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
   const [expandedPendingFiles, setExpandedPendingFiles] = useState<Set<string>>(new Set());
   const [isEditing, setIsEditing] = useState(false);
@@ -388,10 +395,7 @@ export const MessageRow = memo(function MessageRow({
   if (isUser) {
     if (message.kind === "summary-request") {
       return (
-        <div
-          data-message-id={message.id}
-          className="group mb-6 flex flex-col items-end gap-1 px-4"
-        >
+        <div data-message-id={message.id} className="group mb-6 flex flex-col items-end gap-1 px-4">
           <div className="mr-1 flex items-baseline gap-2">
             <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
               🎙️ {t("chat.summaryRequestLabel")}
@@ -459,9 +463,7 @@ export const MessageRow = memo(function MessageRow({
                 borderTopRightRadius: 0,
               }}
             >
-              <p className="text-foreground text-[14px] font-semibold break-words">
-                {task.title}
-              </p>
+              <p className="text-foreground text-[14px] font-semibold break-words">{task.title}</p>
               {task.description && (
                 <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed break-words whitespace-pre-wrap">
                   {task.description}
@@ -537,10 +539,7 @@ export const MessageRow = memo(function MessageRow({
       }
       // Task record missing (e.g. cleaned up) — fall back to plain text.
       return (
-        <div
-          data-message-id={message.id}
-          className="group mb-6 flex flex-col items-end gap-1 px-4"
-        >
+        <div data-message-id={message.id} className="group mb-6 flex flex-col items-end gap-1 px-4">
           <div className="mr-1 flex items-baseline gap-2">
             <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
               📋 {t("chat.tasks")}
@@ -752,13 +751,9 @@ export const MessageRow = memo(function MessageRow({
               }}
             >
               {message.kind === "summary" ? (
-                <>
-                  🎙️ {t("chat.summaryBadge")}
-                </>
+                <>🎙️ {t("chat.summaryBadge")}</>
               ) : (
-                <>
-                  📋 {t("chat.taskDoneBadge")}
-                </>
+                <>📋 {t("chat.taskDoneBadge")}</>
               )}
             </span>
           )}
@@ -768,8 +763,8 @@ export const MessageRow = memo(function MessageRow({
         </span>
       </div>
 
-      {/* Main bubble — hide when only toolCalls with no content */}
-      {(content || isStreaming || !(message.toolCalls && message.toolCalls.length > 0)) && (
+      {/* Main bubble — image-only and tool-only responses render without an empty bubble. */}
+      {showAssistantBubble && (
         <div
           className="min-w-0 overflow-hidden rounded-2xl px-4 py-3"
           style={{

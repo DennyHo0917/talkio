@@ -10,6 +10,9 @@ import type {
   ModelMetadataMatch,
   ModelMetadataSource,
   ReasoningOption,
+  ModelInputModality,
+  ModelOutputModality,
+  ImageGenerationApi,
 } from "../types";
 import { kvStore } from "../storage/kv-store";
 import { secretStore } from "../services/secret-store";
@@ -21,7 +24,12 @@ import {
   testProviderConnection,
   checkModelHealth,
 } from "../services/provider-service";
-import { resolveModelDescriptor } from "../services/provider-profiles/model-catalog";
+import {
+  resolveModelDescriptor,
+  setModelOverride,
+} from "../services/provider-profiles/model-catalog";
+import { useSettingsStore } from "./settings-store";
+import { inferImageGenerationApi } from "../services/image-model";
 
 const PROVIDERS_KEY = "providers";
 const MODELS_KEY = "models";
@@ -35,6 +43,7 @@ interface ProviderState {
   getModelById: (id: string) => Model | undefined;
   getModelsByProvider: (providerId: string) => Model[];
   getEnabledModels: () => Model[];
+  getEnabledConversationModels: () => Model[];
 
   // Actions
   addProvider: (provider: Provider) => Promise<void>;
@@ -71,6 +80,94 @@ function persistModels(models: Model[]) {
   kvStore.setObject(MODELS_KEY, models);
 }
 
+async function migrateLegacyImageConfig(
+  providers: Provider[],
+  models: Model[],
+): Promise<{ providers: Provider[]; models: Model[]; defaultImageModelId?: string }> {
+  const settings = useSettingsStore.getState().settings;
+  const baseUrl = settings.imageBaseUrl?.trim();
+  const apiKey = settings.imageApiKey?.trim();
+  const legacyModelId = settings.imageModel?.trim();
+  if (!baseUrl || !apiKey || !legacyModelId) return { providers, models };
+
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  let provider = providers.find(
+    (item) => item.enabled !== false && item.baseUrl.replace(/\/+$/, "") === normalizedBaseUrl,
+  );
+  if (provider) {
+    const existingKey = provider.apiKey || (await secretStore.get(provider.id));
+    if (existingKey && existingKey !== apiKey) provider = undefined;
+  }
+
+  let nextProviders = providers;
+  if (!provider) {
+    const host = (() => {
+      try {
+        return new URL(normalizedBaseUrl).hostname;
+      } catch {
+        return normalizedBaseUrl;
+      }
+    })();
+    const officialOpenAI = normalizedBaseUrl === "https://api.openai.com/v1";
+    provider = {
+      id: generateId(),
+      name: `Image · ${host}`,
+      type: "openai",
+      apiFormat: officialOpenAI ? "responses" : "chat-completions",
+      profileId: officialOpenAI ? "openai" : undefined,
+      baseUrl: normalizedBaseUrl,
+      apiKey,
+      customHeaders: [],
+      enabled: true,
+      status: "connected",
+      createdAt: new Date().toISOString(),
+    };
+    nextProviders = [...providers, provider];
+  } else {
+    provider = { ...provider, apiKey };
+    nextProviders = providers.map((item) => (item.id === provider!.id ? provider! : item));
+  }
+  await secretStore.set(provider.id, apiKey);
+
+  const existingModel = models.find(
+    (model) => model.providerId === provider.id && model.modelId === legacyModelId,
+  );
+  const imageModel: Model = existingModel
+    ? {
+        ...existingModel,
+        outputModalities: [...new Set([...existingModel.outputModalities, "image" as const])],
+        imageGenerationApi:
+          inferImageGenerationApi(provider, [
+            ...new Set([...existingModel.outputModalities, "image" as const]),
+          ]) ?? "openai-compatible",
+        enabled: true,
+      }
+    : {
+        id: generateId(),
+        providerId: provider.id,
+        modelId: legacyModelId,
+        displayName: legacyModelId,
+        avatar: null,
+        capabilities: { vision: false, toolCall: false, reasoning: false, streaming: false },
+        inputModalities: ["text"],
+        outputModalities: ["image"],
+        imageGenerationApi: inferImageGenerationApi(provider, ["image"]) ?? "openai-compatible",
+        capabilitiesVerified: true,
+        maxContextLength: 0,
+        metadataSource: "manual",
+        enabled: true,
+      };
+  const nextModels = existingModel
+    ? models.map((model) => (model.id === existingModel.id ? imageModel : model))
+    : [...models, imageModel];
+  setModelOverride(provider.profileId ?? provider.id, legacyModelId, {
+    inputModalities: imageModel.inputModalities,
+    outputModalities: imageModel.outputModalities,
+  });
+
+  return { providers: nextProviders, models: nextModels, defaultImageModelId: imageModel.id };
+}
+
 function normalizeModel(m: any): Model {
   const legacyCaps = m.capabilities ?? {};
   const caps: ModelCapabilities = {
@@ -79,6 +176,12 @@ function normalizeModel(m: any): Model {
     reasoning: !!legacyCaps.reasoning,
     streaming: legacyCaps.streaming !== false,
   };
+  const inputModalities = Array.isArray(m.inputModalities)
+    ? m.inputModalities.filter(isInputModality)
+    : ["text", ...(caps.vision ? (["image"] as const) : [])];
+  const outputModalities = Array.isArray(m.outputModalities)
+    ? m.outputModalities.filter(isOutputModality)
+    : ["text"];
   return {
     id: String(m.id),
     providerId: String(m.providerId),
@@ -86,6 +189,11 @@ function normalizeModel(m: any): Model {
     displayName: String(m.displayName ?? m.modelId),
     avatar: m.avatar ?? null,
     capabilities: caps,
+    inputModalities,
+    outputModalities,
+    imageGenerationApi: isImageGenerationApi(m.imageGenerationApi)
+      ? m.imageGenerationApi
+      : undefined,
     capabilitiesVerified: !!m.capabilitiesVerified,
     maxContextLength: typeof m.maxContextLength === "number" ? m.maxContextLength : 128000,
     maxOutputTokens: typeof m.maxOutputTokens === "number" ? m.maxOutputTokens : undefined,
@@ -97,6 +205,24 @@ function normalizeModel(m: any): Model {
     metadataProviderId: typeof m.metadataProviderId === "string" ? m.metadataProviderId : undefined,
     enabled: m.enabled !== false,
   } as Model;
+}
+
+function isInputModality(value: unknown): value is ModelInputModality {
+  return (
+    value === "text" ||
+    value === "image" ||
+    value === "audio" ||
+    value === "video" ||
+    value === "file"
+  );
+}
+
+function isOutputModality(value: unknown): value is ModelOutputModality {
+  return value === "text" || value === "image" || value === "audio";
+}
+
+function isImageGenerationApi(value: unknown): value is ImageGenerationApi {
+  return value === "openai" || value === "openai-compatible" || value === "google";
 }
 
 function isMetadataSource(value: unknown): value is ModelMetadataSource {
@@ -120,9 +246,13 @@ function applyCatalogMetadata(
 ): Model {
   const descriptor = resolveModelDescriptor(provider.profileId ?? provider.id, model.modelId);
   if (!descriptor) {
-    return providerContextLength
-      ? { ...model, maxContextLength: providerContextLength, metadataSource: "provider" }
+    const next = providerContextLength
+      ? { ...model, maxContextLength: providerContextLength, metadataSource: "provider" as const }
       : model;
+    return {
+      ...next,
+      imageGenerationApi: inferImageGenerationApi(provider, next.outputModalities),
+    };
   }
 
   const manual = descriptor.metadataSource === "manual";
@@ -135,6 +265,9 @@ function applyCatalogMetadata(
       : (providerContextLength ?? descriptor.contextWindow ?? model.maxContextLength),
     maxOutputTokens: descriptor.maxOutputTokens ?? model.maxOutputTokens,
     reasoningOptions: descriptor.reasoningOptions ?? model.reasoningOptions,
+    inputModalities: descriptor.inputModalities,
+    outputModalities: descriptor.outputModalities,
+    imageGenerationApi: inferImageGenerationApi(provider, descriptor.outputModalities),
     capabilities: descriptor.capabilities
       ? {
           vision: descriptor.inputModalities.includes("image"),
@@ -181,7 +314,10 @@ async function hydrateProviderSecrets(providers: Provider[]): Promise<Provider[]
 function loadInitial() {
   const providers = kvStore.getObject<Provider[]>(PROVIDERS_KEY) ?? [];
   const rawModels = kvStore.getObject<any[]>(MODELS_KEY) ?? [];
-  const models: Model[] = rawModels.map(normalizeModel);
+  const models: Model[] = rawModels.map(normalizeModel).map((model) => {
+    const provider = providers.find((item) => item.id === model.providerId);
+    return provider ? applyCatalogMetadata(model, provider) : model;
+  });
   return { providers, models };
 }
 
@@ -207,7 +343,23 @@ export const useProviderStore = create<ProviderState>((set, get) => {
           .providers.filter((p) => p.enabled !== false)
           .map((p) => p.id),
       );
-      return get().models.filter((m) => m.enabled && enabledProviderIds.has(m.providerId));
+      return get().models.filter(
+        (m) =>
+          m.enabled && enabledProviderIds.has(m.providerId) && m.outputModalities.includes("text"),
+      );
+    },
+    getEnabledConversationModels: () => {
+      const enabledProviderIds = new Set(
+        get()
+          .providers.filter((provider) => provider.enabled !== false)
+          .map((provider) => provider.id),
+      );
+      return get().models.filter(
+        (model) =>
+          model.enabled &&
+          enabledProviderIds.has(model.providerId) &&
+          model.outputModalities.some((modality) => modality === "text" || modality === "image"),
+      );
     },
 
     addProvider: async (provider) => {
@@ -278,6 +430,8 @@ export const useProviderStore = create<ProviderState>((set, get) => {
           reasoning: false,
           streaming: true,
         },
+        inputModalities: ["text"],
+        outputModalities: ["text"],
         capabilitiesVerified: false,
         maxContextLength: 128000,
         metadataSource: "default",
@@ -344,9 +498,29 @@ export const useProviderStore = create<ProviderState>((set, get) => {
       });
       set({ providers, models });
       persistModels(models);
-      void hydrateProviderSecrets(providers).then((hydrated) => {
-        set({ providers: hydrated });
-      });
+      void (async () => {
+        let nextProviders = providers;
+        let nextModels = models;
+        try {
+          const migrated = await migrateLegacyImageConfig(providers, models);
+          nextProviders = migrated.providers;
+          nextModels = migrated.models;
+          if (migrated.defaultImageModelId) {
+            persistProviders(nextProviders);
+            persistModels(nextModels);
+            useSettingsStore.getState().updateSettings({
+              defaultImageModelId: migrated.defaultImageModelId,
+              imageBaseUrl: "",
+              imageApiKey: "",
+              imageModel: "",
+            });
+          }
+        } catch (error) {
+          console.error("[provider-store] legacy image configuration migration failed", error);
+        }
+        const hydrated = await hydrateProviderSecrets(nextProviders);
+        set({ providers: hydrated, models: nextModels });
+      })();
     },
 
     fetchModels: async (providerId: string) => {
