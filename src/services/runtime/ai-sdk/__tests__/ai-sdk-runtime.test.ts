@@ -76,6 +76,25 @@ describe("AISdkRuntime event mapping", () => {
     ]);
   });
 
+  it("does not emit fake zero usage when a provider omits token counts", async () => {
+    mockStreamText.mockReturnValue(
+      makeStream([
+        { type: "text-delta", id: "t1", text: "Hello" },
+        {
+          type: "finish",
+          finishReason: "stop",
+          totalUsage: { inputTokens: undefined, outputTokens: undefined },
+        },
+      ]),
+    );
+    const runtime = new AISdkRuntime(() => ({}) as never);
+
+    const events = await collect(runtime.run(makeRequest()));
+
+    expect(events.some((event) => event.type === "usage")).toBe(false);
+    expect(events.at(-1)).toEqual({ type: "run-completed", reason: "stop" });
+  });
+
   it("maps incremental tool input to started + arguments deltas", async () => {
     mockStreamText.mockReturnValue(
       makeStream([

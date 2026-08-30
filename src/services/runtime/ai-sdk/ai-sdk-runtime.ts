@@ -93,6 +93,7 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
         apiKey,
         headers,
         fetch,
+        includeUsage: true,
       }).chatModel(opts.modelId);
   }
 }
@@ -156,6 +157,20 @@ function buildProviderOptions(request: ParticipantRequest): Record<string, unkno
     return { google: { responseModalities: ["TEXT", "IMAGE"] } };
   }
   return undefined;
+}
+
+function completeUsage(
+  usage: { inputTokens?: number; outputTokens?: number } | null | undefined,
+): { inputTokens: number; outputTokens: number } | undefined {
+  if (
+    typeof usage?.inputTokens !== "number" ||
+    !Number.isFinite(usage.inputTokens) ||
+    typeof usage.outputTokens !== "number" ||
+    !Number.isFinite(usage.outputTokens)
+  ) {
+    return undefined;
+  }
+  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
 /** Classify AI SDK error text into a structured GenerationError. */
@@ -291,15 +306,8 @@ export class AISdkRuntime implements ParticipantRuntime {
                   };
                   break;
                 case "finish":
-                  if (event.totalUsage) {
-                    yield {
-                      type: "usage",
-                      usage: {
-                        inputTokens: event.totalUsage.inputTokens ?? 0,
-                        outputTokens: event.totalUsage.outputTokens ?? 0,
-                      },
-                    };
-                  }
+                  const finalUsage = completeUsage(event.totalUsage);
+                  if (finalUsage) yield { type: "usage", usage: finalUsage };
                   yield { type: "run-completed", reason: event.finishReason };
                   terminated = true;
                   break;
@@ -329,15 +337,8 @@ export class AISdkRuntime implements ParticipantRuntime {
 
           if (!terminated) {
             const [usage, finishReason] = await Promise.all([result.usage, result.finishReason]);
-            if (usage && usage.inputTokens !== undefined) {
-              yield {
-                type: "usage",
-                usage: {
-                  inputTokens: usage.inputTokens ?? 0,
-                  outputTokens: usage.outputTokens ?? 0,
-                },
-              };
-            }
+            const finalUsage = completeUsage(usage);
+            if (finalUsage) yield { type: "usage", usage: finalUsage };
             yield { type: "run-completed", reason: finishReason ?? "completed" };
           }
         } finally {

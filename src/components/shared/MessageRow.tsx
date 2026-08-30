@@ -131,18 +131,19 @@ function AssistantActionBar({
       {onRegenerate && (
         <ActionBtn icon="refresh-outline" onClick={() => onRegenerate(message.id)} />
       )}
-      {message.tokenUsage && (
-        <div
-          className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
-          style={{ backgroundColor: "var(--muted)" }}
-        >
-          <IoAnalyticsOutline size={11} color="var(--muted-foreground)" />
-          <span className="text-muted-foreground font-mono text-[10px]">
-            {formatTokens(message.tokenUsage.inputTokens)}→
-            {formatTokens(message.tokenUsage.outputTokens)}
-          </span>
-        </div>
-      )}
+      {message.tokenUsage &&
+        (message.tokenUsage.inputTokens > 0 || message.tokenUsage.outputTokens > 0) && (
+          <div
+            className="ml-1 flex items-center gap-1 rounded px-1.5 py-0.5"
+            style={{ backgroundColor: "var(--muted)" }}
+          >
+            <IoAnalyticsOutline size={11} color="var(--muted-foreground)" />
+            <span className="text-muted-foreground font-mono text-[10px]">
+              {formatTokens(message.tokenUsage.inputTokens)}→
+              {formatTokens(message.tokenUsage.outputTokens)}
+            </span>
+          </div>
+        )}
 
       {/* ··· overflow menu */}
       <div className="relative">

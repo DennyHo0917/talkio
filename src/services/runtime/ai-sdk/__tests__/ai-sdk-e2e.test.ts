@@ -4,7 +4,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { AISdkRuntime } from "../ai-sdk-runtime";
+import { AISdkRuntime, getLanguageModel } from "../ai-sdk-runtime";
 import type { GenerationEvent } from "../../events";
 import type { ParticipantRequest } from "../../types";
 
@@ -58,13 +58,7 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
   it("streams text, thinking, incremental tool args and usage from a real OpenAI-compatible SSE stream", async () => {
     mockFetch.mockResolvedValue(openaiSseResponse());
 
-    const runtime = new AISdkRuntime((req) =>
-      createOpenAI({
-        apiKey: "sk-test",
-        baseURL: req.baseUrl,
-        fetch: mockFetch as unknown as typeof fetch,
-      }).chat(req.modelId),
-    );
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
 
     const events = await collect(runtime.run(makeRequest()));
 
@@ -73,6 +67,9 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
     const [url, init] = mockFetch.mock.calls[0];
     expect(String(url)).toBe("https://api.example.com/v1/chat/completions");
     expect((init as RequestInit).headers).toMatchObject({ authorization: "Bearer sk-test" });
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      stream_options: { include_usage: true },
+    });
 
     const text = events
       .filter((e) => e.type === "text-delta")
