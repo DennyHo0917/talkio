@@ -24,7 +24,7 @@ import { useConfirm, appAlert } from "../../components/shared/ConfirmDialogProvi
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { EmptyState } from "../../components/shared/EmptyState";
 import { BUILT_IN_TOOLS } from "../../services/built-in-tools";
-import { ApiClient } from "../../services/api-client";
+import { generateIdentityDraft } from "../../services/identity-generation";
 import { ModelPicker } from "../../components/shared/ModelPicker";
 
 type IdentityStoreState = ReturnType<typeof useIdentityStore.getState>;
@@ -379,36 +379,10 @@ function IdentityForm({
 
     setAiLoading(true);
     try {
-      const client = new ApiClient(provider);
-      const icons =
-        "code, translate, architecture, security, finance, writing, research, marketing, design, general";
-      const data = await client.chat({
-        model: model.modelId,
-        temperature: 0.7,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You generate identity cards for an AI assistant app. Given a description, return ONLY a JSON object with:\n" +
-              "- name: short name (2-4 words)\n" +
-              `- icon: one of [${icons}]\n` +
-              "- systemPrompt: a concise system prompt (2-4 sentences) defining the role, expertise, and tone.\n" +
-              "Return raw JSON only, no markdown fences.",
-          },
-          { role: "user", content: aiDesc.trim() },
-        ],
-        stream: false,
-      });
-
-      const text = data.choices?.[0]?.message?.content ?? "";
-      const jsonStr = text
-        .replace(/^```[\s\S]*?\n/, "")
-        .replace(/\n```$/, "")
-        .trim();
-      const result = JSON.parse(jsonStr);
-      if (result.name) setName(String(result.name));
-      if (result.icon) setIcon(String(result.icon));
-      if (result.systemPrompt) setSystemPrompt(String(result.systemPrompt));
+      const result = await generateIdentityDraft(provider, model.modelId, aiDesc.trim());
+      setName(result.name);
+      setIcon(result.icon);
+      setSystemPrompt(result.systemPrompt);
     } catch (err) {
       appAlert(err instanceof Error ? err.message : "Generation failed");
     } finally {

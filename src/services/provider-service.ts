@@ -1,14 +1,39 @@
 import type { Model, ModelCapabilities, Provider } from "../types";
-import type { ProbeResult } from "./provider-adapters";
+import { generateText, jsonSchema, tool } from "ai";
+import { APICallError } from "@ai-sdk/provider";
 import { appFetch } from "../lib/http";
 import { buildProviderHeaders } from "./provider-headers";
-import { getAdapter } from "./provider-adapters";
 import {
-  appendResourcePath,
   isAzureOpenAIProvider,
   resolveAdapterBaseUrl,
   resolveProviderResourceUrl,
 } from "./provider-request";
+import { getLanguageModel } from "./runtime/ai-sdk/ai-sdk-runtime";
+
+export interface ProbeResult {
+  capabilities: Partial<ModelCapabilities>;
+  warnings: string[];
+}
+
+const PROBE_IMAGE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+function resolveSdkModel(provider: Provider, modelId: string) {
+  return getLanguageModel({
+    apiFormat: provider.apiFormat,
+    baseUrl: resolveAdapterBaseUrl(provider, modelId),
+    headers: buildProviderHeaders(provider),
+    modelId,
+  });
+}
+
+function errorDetail(error: unknown): string {
+  if (APICallError.isInstance(error)) {
+    const body = error.responseBody?.trim().slice(0, 160);
+    return `HTTP ${error.statusCode ?? "error"}${body ? `: ${body}` : ""}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 export interface ProviderModelPayload {
   id: string;
@@ -134,10 +159,60 @@ export async function probeProviderModelCapabilities(
   provider: Provider,
   modelId: string,
 ): Promise<ProbeResult> {
-  const baseUrl = resolveAdapterBaseUrl(provider, modelId);
-  const headers = buildProviderHeaders(provider, { "Content-Type": "application/json" });
-  const adapter = getAdapter(provider.apiFormat);
-  return adapter.probeCapabilities({ baseUrl, headers, modelId });
+  const model = resolveSdkModel(provider, modelId);
+  const capabilities: Partial<ModelCapabilities> = {};
+  const warnings: string[] = [];
+
+  try {
+    await generateText({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this image in one word." },
+            { type: "image", image: PROBE_IMAGE },
+          ],
+        },
+      ],
+      maxOutputTokens: 8,
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(15000),
+    });
+    capabilities.vision = true;
+  } catch (error) {
+    warnings.push(`Vision probe failed: ${errorDetail(error)}`);
+  }
+
+  try {
+    const result = await generateText({
+      model,
+      prompt: "Call the test tool.",
+      tools: {
+        test: tool({
+          description: "Capability probe tool",
+          inputSchema: jsonSchema<Record<string, never>>({
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+          }),
+        }),
+      },
+      toolChoice: { type: "tool", toolName: "test" },
+      maxOutputTokens: 8,
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(15000),
+    });
+    if (result.toolCalls.some((call) => call.toolName === "test")) {
+      capabilities.toolCall = true;
+    } else {
+      warnings.push("Tool probe completed without a tool call");
+    }
+  } catch (error) {
+    warnings.push(`Tool probe failed: ${errorDetail(error)}`);
+  }
+
+  return { capabilities, warnings };
 }
 
 /**
@@ -148,46 +223,16 @@ export async function checkModelHealth(
   provider: Provider,
   modelId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const baseUrl = resolveAdapterBaseUrl(provider, modelId);
-  const headers = buildProviderHeaders(provider, { "Content-Type": "application/json" });
-
   try {
-    if (provider.apiFormat === "anthropic-messages") {
-      const res = await appFetch(`${baseUrl}/v1/messages`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: modelId,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "hi" }],
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (res.ok) return { ok: true };
-      const text = await res.text().catch(() => "");
-      return { ok: false, error: `${res.status}${text ? ": " + text.slice(0, 120) : ""}` };
-    }
-
-    const endpoint =
-      provider.apiFormat === "responses"
-        ? appendResourcePath(baseUrl, "/responses")
-        : appendResourcePath(baseUrl, "/chat/completions");
-
-    const body =
-      provider.apiFormat === "responses"
-        ? { model: modelId, input: "hi", max_output_tokens: 1 }
-        : { model: modelId, max_tokens: 1, messages: [{ role: "user", content: "hi" }] };
-
-    const res = await appFetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000),
+    await generateText({
+      model: resolveSdkModel(provider, modelId),
+      prompt: "hi",
+      maxOutputTokens: 1,
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(15000),
     });
-    if (res.ok) return { ok: true };
-    const text = await res.text().catch(() => "");
-    return { ok: false, error: `${res.status}${text ? ": " + text.slice(0, 120) : ""}` };
-  } catch (err: any) {
-    return { ok: false, error: err?.message || "Unknown error" };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorDetail(error) };
   }
 }

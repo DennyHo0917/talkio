@@ -20,7 +20,7 @@ import { useProviderStore } from "../../stores/provider-store";
 import { getParticipantLabel, getParticipantLabelParts } from "../../stores/chat-message-builder";
 import { useSettingsStore } from "../../stores/settings-store";
 import { getAvatarProps } from "../../lib/avatar-utils";
-import { appFetch } from "../../lib/http";
+import { transcribeAudio } from "../../services/transcription";
 import { appAlert } from "../../components/shared/ConfirmDialogProvider";
 import {
   parseFile,
@@ -347,26 +347,13 @@ export const ChatInput = memo(function ChatInput({
           try {
             const { sttBaseUrl, sttApiKey, sttModel } = useSettingsStore.getState().settings;
 
-            const ext = mimeType.includes("webm") ? "webm" : "mp4";
-            const formData = new FormData();
-            formData.append("file", audioBlob, `recording.${ext}`);
-            formData.append("model", sttModel || "whisper-large-v3-turbo");
-
-            const baseUrl = sttBaseUrl.replace(/\/+$/, "");
-            const res = await appFetch(`${baseUrl}/audio/transcriptions`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${sttApiKey}` },
-              body: formData,
+            const transcribedText = await transcribeAudio({
+              audio: audioBlob,
+              baseUrl: sttBaseUrl,
+              apiKey: sttApiKey,
+              modelId: sttModel || "whisper-large-v3-turbo",
               signal: AbortSignal.timeout(30000),
             });
-
-            if (!res.ok) {
-              const errText = await res.text();
-              throw new Error(`Transcription failed: ${res.status} - ${errText}`);
-            }
-
-            const data = await res.json();
-            const transcribedText = data.text ?? "";
             if (transcribedText) {
               setText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
               textareaRef.current?.focus();

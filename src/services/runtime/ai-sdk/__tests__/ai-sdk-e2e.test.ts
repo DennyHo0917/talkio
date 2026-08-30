@@ -31,6 +31,33 @@ function openaiSseResponse(): Response {
   );
 }
 
+function taggedReasoningResponse(tag: string): Response {
+  const content = [`<${tag.slice(0, 2)}`, `${tag.slice(2)}>hidden</${tag}>visible`];
+  const chunks = [
+    ...content.map(
+      (text) =>
+        `data: ${JSON.stringify({
+          id: "reasoning-1",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: "reasoning-model",
+          choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
+        })}\n\n`,
+    ),
+    'data: {"id":"reasoning-1","object":"chat.completion.chunk","created":1,"model":"reasoning-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n',
+    "data: [DONE]\n\n",
+  ];
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "text/event-stream" } },
+  );
+}
+
 function makeRequest(overrides: Partial<ParticipantRequest> = {}): ParticipantRequest {
   return {
     runId: "run-1",
@@ -126,6 +153,29 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
       temperature: 0.35,
     });
   });
+
+  it.each(["think", "thinking"])(
+    "extracts <%s> text as reasoning across stream chunks",
+    async (tag) => {
+      mockFetch.mockResolvedValue(taggedReasoningResponse(tag));
+      const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+      const events = await collect(runtime.run(makeRequest({ modelId: "reasoning-model" })));
+
+      expect(
+        events
+          .filter((event) => event.type === "thinking-delta")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe("hidden");
+      expect(
+        events
+          .filter((event) => event.type === "text-delta")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe("visible");
+    },
+  );
 
   it("normalizes an HTTP 401 into run-failed auth", async () => {
     mockFetch.mockResolvedValue(

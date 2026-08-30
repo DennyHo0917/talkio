@@ -1,7 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { CustomHeader, DiscoveredTool, McpServer } from "../../types";
-import { StreamableHTTPClientTransport } from "./streamable-http-transport";
+import { appFetch } from "../../lib/http";
 import { TauriStdioTransport } from "./stdio-transport";
 
 export type McpConnectionStatus = "idle" | "connecting" | "connected" | "error";
@@ -117,8 +118,9 @@ class McpConnectionManager {
         conn.server.env,
       );
     } else {
-      transport = new StreamableHTTPClientTransport(conn.server.url, {
+      transport = new StreamableHTTPClientTransport(new URL(conn.server.url), {
         requestInit: buildRequestInit(conn.server.customHeaders),
+        fetch: appFetch,
       });
     }
     const client = new Client({ name: "talkio-web", version: "2.0.0" }, { capabilities: {} });
@@ -214,11 +216,9 @@ class McpConnectionManager {
   disconnect(serverId: string): void {
     const conn = this.connections.get(serverId);
     if (conn) {
-      try {
-        conn.client?.close();
-      } catch {
-        // ignore
-      }
+      void conn.client?.close().catch((error) => {
+        console.warn(`[MCP] Failed to close connection ${serverId}`, error);
+      });
       this.connections.delete(serverId);
     }
   }

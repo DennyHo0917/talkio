@@ -12,6 +12,9 @@ import {
   stepCountIs,
   tool,
   jsonSchema,
+  RetryError,
+  extractReasoningMiddleware,
+  wrapLanguageModel,
   type JSONSchema7,
   type LanguageModel,
   type ModelMessage,
@@ -21,6 +24,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
+import { APICallError, type LanguageModelV4 } from "@ai-sdk/provider";
 import { appFetch } from "../../../lib/http";
 import type { ApiFormat } from "../../../types";
 import type { GenerationEvent, GenerationError } from "../events";
@@ -80,21 +84,25 @@ export interface ModelResolveOptions {
 }
 
 /** Resolve an AI SDK LanguageModel, routing every provider request through appFetch (CORS). */
-export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
+export function getLanguageModel(opts: ModelResolveOptions): LanguageModelV4 {
   const apiKey = extractApiKey(opts.headers);
   const headers = passthroughHeaders(opts.headers);
   const fetch = appFetch as unknown as typeof globalThis.fetch;
+  let model: LanguageModelV4;
   switch (opts.apiFormat) {
     case "anthropic-messages":
-      return createAnthropic({ apiKey, baseURL: opts.baseUrl, headers, fetch }).messages(
+      model = createAnthropic({ apiKey, baseURL: opts.baseUrl, headers, fetch }).messages(
         opts.modelId,
       );
+      break;
     case "gemini-generate-content":
-      return createGoogle({ apiKey, baseURL: opts.baseUrl, headers, fetch }).chat(opts.modelId);
+      model = createGoogle({ apiKey, baseURL: opts.baseUrl, headers, fetch }).chat(opts.modelId);
+      break;
     case "responses":
-      return createOpenAI({ apiKey, baseURL: opts.baseUrl, headers, fetch }).responses(
+      model = createOpenAI({ apiKey, baseURL: opts.baseUrl, headers, fetch }).responses(
         opts.modelId,
       );
+      break;
     default:
       // OpenAI-compatible covers real OpenAI + third-party gateways and, unlike
       // @ai-sdk/openai, surfaces `delta.reasoning` (build4ai / OpenRouter / etc.)
@@ -103,7 +111,7 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
       const usesHeaderApiKey = Object.keys(opts.headers).some(
         (name) => name.toLowerCase() === "api-key" || name.toLowerCase() === "x-api-key",
       );
-      return createOpenAICompatible({
+      model = createOpenAICompatible({
         name: "openai-compatible",
         baseURL,
         queryParams,
@@ -112,7 +120,15 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModel {
         fetch,
         includeUsage: true,
       }).chatModel(opts.modelId);
+      break;
   }
+  return wrapLanguageModel({
+    model,
+    middleware: [
+      extractReasoningMiddleware({ tagName: "think" }),
+      extractReasoningMiddleware({ tagName: "thinking" }),
+    ],
+  });
 }
 
 /** Default resolver: protocol → provider factory (OpenAI-compatible for the rest). */
@@ -192,26 +208,31 @@ function completeUsage(
   return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
 }
 
-/** Classify AI SDK error text into a structured GenerationError. */
+function unwrapRetryError(error: unknown): unknown {
+  if (!RetryError.isInstance(error)) return error;
+  return error.lastError ?? error;
+}
+
+/** Classify AI SDK errors without depending on provider-specific message text. */
 export function classifyAiSdkError(err: unknown, signal: AbortSignal): GenerationError {
   if (signal.aborted) {
     return { code: "aborted", message: "Run cancelled", retryable: false };
   }
-  const message = err instanceof Error ? err.message : String(err);
-  if (/aborted|abort/i.test(message)) {
+  const unwrapped = unwrapRetryError(err);
+  const message = unwrapped instanceof Error ? unwrapped.message : String(unwrapped);
+  if (unwrapped instanceof DOMException && unwrapped.name === "AbortError") {
     return { code: "aborted", message, retryable: false };
   }
-  if (/429|rate.?limit/i.test(message)) {
-    return { code: "rate-limit", message, retryable: true };
-  }
-  if (/401|403|api key|unauthor/i.test(message)) {
-    return { code: "auth", message, retryable: false };
-  }
-  if (/4\d\d|invalid/i.test(message)) {
-    return { code: "invalid-request", message, retryable: false };
-  }
-  if (/5\d\d|server/i.test(message)) {
-    return { code: "api", message, retryable: true };
+  if (APICallError.isInstance(unwrapped)) {
+    const status = unwrapped.statusCode;
+    if (status === 429) return { code: "rate-limit", message, retryable: true };
+    if (status === 401 || status === 403) {
+      return { code: "auth", message, retryable: false };
+    }
+    if (status !== undefined && status >= 400 && status < 500) {
+      return { code: "invalid-request", message, retryable: false };
+    }
+    return { code: "api", message, retryable: unwrapped.isRetryable };
   }
   return { code: "unknown", message, retryable: false };
 }
@@ -254,6 +275,7 @@ export class AISdkRuntime implements ParticipantRuntime {
             reasoning: request.reasoningEffort as never,
             temperature: request.temperature,
             providerOptions: providerOptions as never,
+            maxRetries: 2,
             abortSignal: controller.signal,
           });
 

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { APICallError } from "@ai-sdk/provider";
+import { RetryError } from "ai";
 
 const { mockStreamText } = vi.hoisted(() => ({ mockStreamText: vi.fn() }));
 vi.mock("ai", async () => {
@@ -46,6 +48,16 @@ async function collect(gen: AsyncIterable<GenerationEvent>): Promise<GenerationE
   const events: GenerationEvent[] = [];
   for await (const e of gen) events.push(e);
   return events;
+}
+
+function apiError(statusCode: number, isRetryable = statusCode >= 500): APICallError {
+  return new APICallError({
+    message: `HTTP ${statusCode}`,
+    url: "https://api.example.com/v1/chat/completions",
+    requestBodyValues: {},
+    statusCode,
+    isRetryable,
+  });
 }
 
 describe("AISdkRuntime event mapping", () => {
@@ -146,7 +158,7 @@ describe("AISdkRuntime event mapping", () => {
     mockStreamText.mockReturnValue(
       makeStream([
         { type: "text-delta", id: "t1", text: "partial" },
-        { type: "error", error: new Error("API Error 429: slow down") },
+        { type: "error", error: apiError(429) },
       ]),
     );
     const runtime = new AISdkRuntime(() => ({}) as never);
@@ -155,7 +167,7 @@ describe("AISdkRuntime event mapping", () => {
 
     expect(events[events.length - 1]).toEqual({
       type: "run-failed",
-      error: { code: "rate-limit", message: "API Error 429: slow down", retryable: true },
+      error: { code: "rate-limit", message: "HTTP 429", retryable: true },
     });
   });
 
@@ -177,7 +189,7 @@ describe("AISdkRuntime event mapping", () => {
     mockStreamText.mockReturnValue({
       fullStream: {
         async *[Symbol.asyncIterator]() {
-          throw new Error("API Error 401: nope");
+          throw apiError(401, false);
         },
       },
       usage: Promise.resolve(null),
@@ -189,7 +201,21 @@ describe("AISdkRuntime event mapping", () => {
 
     expect(events[events.length - 1]).toEqual({
       type: "run-failed",
-      error: { code: "auth", message: "API Error 401: nope", retryable: false },
+      error: { code: "auth", message: "HTTP 401", retryable: false },
+    });
+  });
+
+  it("unwraps RetryError and classifies its last API error", () => {
+    const error = new RetryError({
+      message: "Retry limit reached",
+      reason: "maxRetriesExceeded",
+      errors: [apiError(503, true)],
+    });
+
+    expect(classifyAiSdkError(error, new AbortController().signal)).toEqual({
+      code: "api",
+      message: "HTTP 503",
+      retryable: true,
     });
   });
 
@@ -238,6 +264,15 @@ describe("AISdkRuntime event mapping", () => {
     expect(captured.signal?.aborted).toBe(true);
     expect(next.value).toMatchObject({ type: "run-failed", error: { code: "aborted" } });
   });
+
+  it("delegates request retries to the AI SDK", async () => {
+    mockStreamText.mockReturnValue(makeStream([{ type: "text-delta", id: "t1", text: "hi" }]));
+    const runtime = new AISdkRuntime(() => ({}) as never);
+
+    await collect(runtime.run(makeRequest()));
+
+    expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 2 }));
+  });
 });
 
 describe("AISdkRuntime helpers", () => {
@@ -264,15 +299,14 @@ describe("AISdkRuntime helpers", () => {
   });
 
   it("classifyAiSdkError covers the error classes", () => {
-    expect(
-      classifyAiSdkError(new Error("429 Too Many Requests"), new AbortController().signal).code,
-    ).toBe("rate-limit");
-    expect(
-      classifyAiSdkError(new Error("401 unauthorized"), new AbortController().signal).code,
-    ).toBe("auth");
-    expect(
-      classifyAiSdkError(new Error("500 server error"), new AbortController().signal).code,
-    ).toBe("api");
+    expect(classifyAiSdkError(apiError(429), new AbortController().signal).code).toBe("rate-limit");
+    expect(classifyAiSdkError(apiError(401, false), new AbortController().signal).code).toBe(
+      "auth",
+    );
+    expect(classifyAiSdkError(apiError(500), new AbortController().signal).code).toBe("api");
+    expect(classifyAiSdkError(new Error("opaque failure"), new AbortController().signal).code).toBe(
+      "unknown",
+    );
     const aborted = new AbortController();
     aborted.abort();
     expect(classifyAiSdkError(new Error("anything"), aborted.signal).code).toBe("aborted");

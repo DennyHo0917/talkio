@@ -248,7 +248,6 @@ export async function generateForParticipant(
     const acc: ContentAccumulator = {
       fullContent: "",
       fullReasoning: "",
-      inThinkTag: false,
       images: [],
       pendingToolCalls: [],
       toolResults: [],
@@ -337,24 +336,14 @@ export async function generateForParticipant(
     const resetAcc = () => {
       acc.fullContent = "";
       acc.fullReasoning = "";
-      acc.inThinkTag = false;
       acc.images = [];
       acc.pendingToolCalls = [];
       acc.toolResults = [];
     };
 
-    // Stream with auto-retry on transient errors
-    let sseUsage;
-    try {
-      ({ usage: sseUsage } = await streamOnce());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const retryable =
-        /empty response|overloaded|timeout|temporarily|503|502|network|interrupted/i.test(message);
-      if (!retryable || ctx.abortController.signal.aborted) throw error;
-      resetAcc();
-      ({ usage: sseUsage } = await streamOnce());
-    }
+    // Request-level retries are owned by the AI SDK. Re-running this whole
+    // stream here could repeat tool side effects that already completed.
+    const { usage: sseUsage } = await streamOnce();
     flusher.flush();
 
     const duration = (Date.now() - startTime) / 1000;

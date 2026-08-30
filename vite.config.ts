@@ -39,9 +39,7 @@ export default defineConfig(async () => ({
           if (id.includes("node_modules/zustand")) return "state";
           if (id.includes("node_modules/i18next") || id.includes("node_modules/react-i18next"))
             return "i18n";
-          if (id.includes("node_modules/react-hook-form")) return "forms";
           if (id.includes("node_modules/framer-motion")) return "motion";
-          if (id.includes("node_modules/date-fns")) return "dates";
           if (id.includes("node_modules/sonner")) return "notifications";
           if (
             id.includes("node_modules/react-markdown") ||
