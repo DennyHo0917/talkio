@@ -8,6 +8,7 @@
  * Inspired by LobeChat's compressContext / summaryHistory chains.
  */
 import { generateText } from "ai";
+import { encode } from "gpt-tokenizer";
 import { getLanguageModel } from "../services/runtime/ai-sdk/ai-sdk-runtime";
 import type { ApiFormat } from "../types";
 
@@ -15,12 +16,7 @@ import type { ApiFormat } from "../types";
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for CJK */
 export function estimateTokens(text: string): number {
-  if (!text) return 0;
-  // Count CJK characters
-  const cjk = text.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
-  const cjkCount = cjk?.length ?? 0;
-  const nonCjkLength = text.length - cjkCount;
-  return Math.ceil(nonCjkLength / 4 + cjkCount / 2);
+  return text ? encode(text).length : 0;
 }
 
 /** Estimate total tokens for an array of API messages */

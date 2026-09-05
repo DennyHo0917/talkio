@@ -1,5 +1,7 @@
 import type { Conversation, Message } from "../types";
 import { saveOrShareFile } from "./file-download";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 export function buildConversationMarkdown(args: {
   title: string;
@@ -74,8 +76,7 @@ export async function exportConversationAsPdf(args: {
   const title = args.conversation.title || args.titleFallback;
   const date = new Date(args.conversation.createdAt).toLocaleDateString();
 
-  const escapeHtml = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const escapeHtml = (s: string) => DOMPurify.sanitize(s, { ALLOWED_TAGS: [] });
 
   let messagesHtml = "";
   for (const msg of args.messages) {
@@ -85,9 +86,9 @@ export async function exportConversationAsPdf(args: {
       minute: "2-digit",
     });
     const isUser = msg.role === "user";
-    const content = msg.content ? escapeHtml(msg.content).replace(/\n/g, "<br>") : "";
+    const content = msg.content ? DOMPurify.sanitize(marked.parse(msg.content) as string) : "";
     const reasoning = msg.reasoningContent
-      ? `<details open><summary>${escapeHtml(args.thoughtProcessLabel)}</summary><div class="reasoning">${escapeHtml(msg.reasoningContent).replace(/\n/g, "<br>")}</div></details>`
+      ? `<details open><summary>${escapeHtml(args.thoughtProcessLabel)}</summary><div class="reasoning">${DOMPurify.sanitize(marked.parse(msg.reasoningContent) as string)}</div></details>`
       : "";
 
     messagesHtml += `

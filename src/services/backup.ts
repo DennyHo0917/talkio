@@ -7,6 +7,7 @@ import { saveOrShareFile } from "./file-download";
 import type { Provider, Model, Identity, McpServer, Task } from "../types";
 import type { Conversation, Message, MessageBlock } from "../types";
 import type { AppSettings } from "../stores/settings-store";
+import { z } from "zod";
 import {
   getAllBlocks,
   getAllConversations,
@@ -60,11 +61,7 @@ export async function createBackup(includeSecrets = false): Promise<BackupData> 
   const settings: BackupSettings | null = storedSettings
     ? includeSecrets
       ? storedSettings
-      : (({
-          sttApiKey: _sttApiKey,
-          imageApiKey: _imageApiKey,
-          ...value
-        }) => value)(storedSettings)
+      : (({ sttApiKey: _sttApiKey, imageApiKey: _imageApiKey, ...value }) => value)(storedSettings)
     : null;
   return {
     version: "3.0",
@@ -165,74 +162,87 @@ export async function importBackupFromString(text: string): Promise<ImportResult
 }
 
 function validateBackupData(data: Record<string, unknown>): BackupData | LegacyBackupData {
-  requireRecordsWithStringFields(data, "providers", ["id"]);
-  requireRecordsWithStringFields(data, "models", ["id", "providerId"]);
-  requireRecordsWithStringFields(data, "identities", ["id"]);
-  requireRecordsWithStringFields(data, "mcpServers", ["id"]);
-  if (data.settings !== undefined && data.settings !== null && !isRecord(data.settings)) {
-    throw new Error("Backup field settings must be an object or null");
+  const record = z.record(z.string(), z.unknown());
+  const stringArray = (fields: string[]) =>
+    z.array(record).superRefine((items, ctx) => {
+      items.forEach((item, index) =>
+        fields.forEach((field) => {
+          if (typeof item[field] !== "string")
+            ctx.addIssue({ code: "custom", path: [index, field], message: "Expected string" });
+        }),
+      );
+    });
+  const base = z
+    .object({
+      version: z.enum(["2.0", "3.0"]),
+      exportedAt: z.string(),
+      providers: stringArray(["id"]),
+      models: stringArray(["id", "providerId"]),
+      identities: stringArray(["id"]),
+      mcpServers: stringArray(["id"]),
+      settings: record.nullable().optional(),
+    })
+    .passthrough();
+  const parsed = base.parse(data);
+  if (parsed.version === "3.0") {
+    z.array(
+      z
+        .object({
+          id: z.string(),
+          type: z.string(),
+          title: z.string(),
+          createdAt: z.string(),
+          updatedAt: z.string(),
+          participants: z.array(z.unknown()),
+          pinned: z.boolean(),
+        })
+        .passthrough(),
+    ).parse(parsed.conversations);
+    z.array(
+      z
+        .object({
+          id: z.string(),
+          conversationId: z.string(),
+          role: z.string(),
+          content: z.string(),
+          status: z.string(),
+          createdAt: z.string(),
+          images: z.array(z.unknown()),
+          generatedImages: z.array(z.unknown()),
+          toolCalls: z.array(z.unknown()),
+          toolResults: z.array(z.unknown()),
+          isStreaming: z.boolean(),
+        })
+        .passthrough(),
+    ).parse(parsed.messages);
+    z.array(
+      z
+        .object({
+          id: z.string(),
+          messageId: z.string(),
+          type: z.string(),
+          content: z.string(),
+          status: z.string(),
+          createdAt: z.string(),
+          sortOrder: z.number(),
+        })
+        .passthrough(),
+    ).parse(parsed.messageBlocks);
+    if (parsed.tasks !== undefined)
+      z.array(
+        z
+          .object({
+            id: z.string(),
+            conversationId: z.string(),
+            title: z.string(),
+            status: z.string(),
+            createdAt: z.string(),
+            updatedAt: z.string(),
+          })
+          .passthrough(),
+      ).parse(parsed.tasks);
   }
-
-  if (data.version === "3.0") {
-    const conversations = requireRecordsWithStringFields(data, "conversations", [
-      "id",
-      "type",
-      "title",
-      "createdAt",
-      "updatedAt",
-    ]);
-    conversations.forEach((conversation, index) => {
-      if (!Array.isArray(conversation.participants) || typeof conversation.pinned !== "boolean") {
-        throw new Error(`Backup conversation at index ${index} has invalid fields`);
-      }
-    });
-
-    const messages = requireRecordsWithStringFields(data, "messages", [
-      "id",
-      "conversationId",
-      "role",
-      "content",
-      "status",
-      "createdAt",
-    ]);
-    messages.forEach((message, index) => {
-      const arrayFields = ["images", "generatedImages", "toolCalls", "toolResults"];
-      if (
-        arrayFields.some((field) => !Array.isArray(message[field])) ||
-        typeof message.isStreaming !== "boolean"
-      ) {
-        throw new Error(`Backup message at index ${index} has invalid fields`);
-      }
-    });
-
-    const blocks = requireRecordsWithStringFields(data, "messageBlocks", [
-      "id",
-      "messageId",
-      "type",
-      "content",
-      "status",
-      "createdAt",
-    ]);
-    blocks.forEach((block, index) => {
-      if (typeof block.sortOrder !== "number") {
-        throw new Error(`Backup message block at index ${index} has invalid fields`);
-      }
-    });
-
-    // Optional for v3.0 backups exported before the tasks table existed.
-    if (data.tasks !== undefined) {
-      requireRecordsWithStringFields(data, "tasks", [
-        "id",
-        "conversationId",
-        "title",
-        "status",
-        "createdAt",
-        "updatedAt",
-      ]);
-    }
-  }
-
-  return data as unknown as BackupData | LegacyBackupData;
+  return parsed as unknown as BackupData | LegacyBackupData;
 }
 
 function requireRecordsWithStringFields(

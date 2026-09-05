@@ -15,181 +15,47 @@ async function getDb() {
     const { default: Database } = await import("@tauri-apps/plugin-sql");
     _db = await Database.load("sqlite:talkio.db");
   } catch {
-    // Fallback: in-memory store for dev/browser preview
-    console.warn("[DB] Tauri SQL plugin not available, using in-memory fallback");
-    _db = createInMemoryDb();
+    // Fallback: SQLite WASM for dev/browser preview. This keeps SQL semantics
+    // identical to the Tauri database instead of maintaining a SQL parser.
+    console.warn("[DB] Tauri SQL plugin not available, using sql.js in-memory database");
+    _db = await createInMemoryDb();
   }
   return _db;
 }
 
 // ─── In-Memory Fallback (for browser dev) ───
-function createInMemoryDb() {
-  const tables: Record<string, Map<string, Record<string, any>>> = {
-    conversations: new Map(),
-    messages: new Map(),
-    message_blocks: new Map(),
-    tasks: new Map(),
+async function createInMemoryDb() {
+  const { default: initSqlJs } = await import("sql.js");
+  const SQL = await initSqlJs({
+    locateFile: (file) => new URL(`sql.js/dist/${file}`, import.meta.url).toString(),
+  });
+  const sqlite = new SQL.Database();
+  const bind = (sql: string, params: any[]) => {
+    const stmt = sqlite.prepare(sql);
+    stmt.bind(params);
+    return stmt;
   };
-
-  type Condition = { col: string; val: any; op: "eq" | "like" };
-
-  function parseWhere(sql: string, params: any[]): { table: string; conditions: Condition[] } {
-    const tableMatch =
-      sql.match(/FROM\s+(\w+)/i) || sql.match(/(?:INTO|UPDATE|DELETE FROM)\s+(\w+)/i);
-    const table = tableMatch?.[1] ?? "";
-    const whereMatch = sql.match(/WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/is);
-    const conditions: Condition[] = [];
-    if (whereMatch) {
-      const parts = whereMatch[1].split(/\s+AND\s+/i);
-      let pIdx = 0;
-      // Count $N placeholders before WHERE to find offset
-      const beforeWhere = sql.slice(0, sql.search(/WHERE/i));
-      pIdx = (beforeWhere.match(/\$\d+/g) ?? []).length;
-      for (const part of parts) {
-        const eq = part.match(/(\w+)\s*(?:=|IS)\s*\$\d+/i);
-        if (eq) {
-          conditions.push({ col: eq[1], val: params[pIdx], op: "eq" });
-        } else {
-          const like = part.match(/(\w+)\s+LIKE\s+\$\d+/i);
-          if (like) {
-            conditions.push({ col: like[1], val: params[pIdx], op: "like" });
-          } else {
-            const isNull = part.match(/(\w+)\s+IS\s+NULL/i);
-            if (isNull) conditions.push({ col: isNull[1], val: null, op: "eq" });
-          }
-        }
-        pIdx++;
-      }
-    }
-    return { table, conditions };
-  }
-
-  function likePatternToRegex(pattern: string): RegExp {
-    // Escape regex specials, then translate SQL LIKE wildcards.
-    // Use the `s` (dotall) flag so `%` (→ `.*`) and `_` (→ `.`) match newlines,
-    // which matches SQLite's LIKE semantics (`%` and `_` span any character).
-    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const translated = escaped.replace(/%/g, ".*").replace(/_/g, ".");
-    return new RegExp(`^${translated}$`, "is");
-  }
-
-  function matchRow(row: Record<string, any>, conditions: Condition[]): boolean {
-    return conditions.every(({ col, val, op }) => {
-      if (op === "like") {
-        if (val === null || val === undefined) return false;
-        return likePatternToRegex(String(val)).test(String(row[col] ?? ""));
-      }
-      if (val === null || val === undefined) return row[col] === null || row[col] === undefined;
-      return String(row[col]) === String(val);
-    });
-  }
-
   return {
     execute: async (sql: string, params: any[] = []) => {
-      const s = sql.trim().toUpperCase();
-
-      if (s.startsWith("CREATE") || s.startsWith("DROP") || s.startsWith("PRAGMA")) {
-        return { rowsAffected: 0 };
-      }
-
-      if (s.startsWith("INSERT INTO")) {
-        const tblMatch = sql.match(/INSERT INTO (\w+)/i);
-        const tbl = tblMatch?.[1];
-        if (!tbl || !tables[tbl]) return { rowsAffected: 0 };
-        const colMatch = sql.match(/\(([^)]+)\)\s*VALUES/i);
-        const cols = colMatch?.[1].split(",").map((c) => c.trim()) ?? [];
-        const row: Record<string, any> = {};
-        cols.forEach((c, i) => {
-          row[c] = params[i] ?? null;
-        });
-        const id = row.id ?? String(Date.now() + Math.random());
-        row.id = id;
-        tables[tbl].set(id, row);
-        return { rowsAffected: 1 };
-      }
-
-      if (s.startsWith("UPDATE")) {
-        const tblMatch = sql.match(/UPDATE (\w+)/i);
-        const tbl = tblMatch?.[1];
-        if (!tbl || !tables[tbl]) return { rowsAffected: 0 };
-        const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/is);
-        const setStr = setMatch?.[1] ?? "";
-        const { conditions } = parseWhere(sql, params);
-        // Parse each "col = $N" directly using regex to avoid comma-in-JSON bugs
-        const setOps: [string, number][] = [];
-        const setRe = /(\w+)\s*=\s*\$(\d+)/gi;
-        let sm: RegExpExecArray | null;
-        while ((sm = setRe.exec(setStr)) !== null) {
-          setOps.push([sm[1], Number(sm[2]) - 1]); // $N is 1-indexed
+      const stmt = bind(sql, params);
+      try {
+        while (stmt.step()) {
+          // Consume all rows for statements that return them.
         }
-        let count = 0;
-        tables[tbl].forEach((row, key) => {
-          if (matchRow(row, conditions)) {
-            const updated = { ...row };
-            setOps.forEach(([col, idx]) => {
-              updated[col] = params[idx];
-            });
-            tables[tbl].set(key, updated);
-            count++;
-          }
-        });
-        return { rowsAffected: count };
+        return { rowsAffected: sqlite.getRowsModified() };
+      } finally {
+        stmt.free();
       }
-
-      if (s.startsWith("DELETE FROM")) {
-        const tblMatch = sql.match(/DELETE FROM (\w+)/i);
-        const tbl = tblMatch?.[1];
-        if (!tbl || !tables[tbl]) return { rowsAffected: 0 };
-        const { conditions } = parseWhere(sql, params);
-        if (conditions.length === 0) {
-          const c = tables[tbl].size;
-          tables[tbl].clear();
-          return { rowsAffected: c };
-        }
-        let count = 0;
-        tables[tbl].forEach((row, key) => {
-          if (matchRow(row, conditions)) {
-            tables[tbl].delete(key);
-            count++;
-          }
-        });
-        return { rowsAffected: count };
-      }
-
-      return { rowsAffected: 0 };
     },
-
     select: async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
-      const { table, conditions } = parseWhere(sql, params);
-      const tbl = tables[table];
-      if (!tbl) return [] as T[];
-
-      let rows = Array.from(tbl.values()).filter((r) => matchRow(r, conditions));
-
-      const orderMatch = sql.match(/ORDER BY\s+(.+?)(?:\s+LIMIT|\s*$)/i);
-      if (orderMatch) {
-        const orderCols = orderMatch[1]
-          .split(",")
-          .map((part) => {
-            const m = part.trim().match(/(\w+)\s*(ASC|DESC)?/i);
-            return m ? { col: m[1], desc: (m[2] ?? "ASC").toUpperCase() === "DESC" } : null;
-          })
-          .filter(Boolean) as { col: string; desc: boolean }[];
-        rows.sort((a, b) => {
-          for (const { col, desc } of orderCols) {
-            const av = a[col] ?? "";
-            const bv = b[col] ?? "";
-            if (av < bv) return desc ? 1 : -1;
-            if (av > bv) return desc ? -1 : 1;
-          }
-          return 0;
-        });
+      const stmt = bind(sql, params);
+      try {
+        const rows: T[] = [];
+        while (stmt.step()) rows.push(stmt.getAsObject() as T);
+        return rows;
+      } finally {
+        stmt.free();
       }
-
-      const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
-      if (limitMatch) rows = rows.slice(0, Number(limitMatch[1]));
-
-      return rows as T[];
     },
   };
 }
@@ -976,10 +842,9 @@ export async function getTaskById(id: string): Promise<Task | null> {
 
 export async function getTasksByConversation(conversationId: string): Promise<Task[]> {
   const db = await getDb();
-  const rows = await db.select(
-    `SELECT * FROM tasks WHERE conversationId = $1 ORDER BY createdAt`,
-    [conversationId],
-  );
+  const rows = await db.select(`SELECT * FROM tasks WHERE conversationId = $1 ORDER BY createdAt`, [
+    conversationId,
+  ]);
   return rows.map(rowToTask);
 }
 
