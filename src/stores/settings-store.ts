@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { kvStore } from "../storage/kv-store";
 import type { ToolApprovalMode } from "../services/tool-approval";
+import { isAndroid } from "../lib/platform";
 
 export interface AppSettings {
   language: "system" | "en" | "zh";
@@ -59,10 +60,15 @@ const SETTINGS_KEY = "settings";
 let removeSystemThemeListener: (() => void) | null = null;
 
 function syncNativeTheme(theme: AppSettings["theme"]) {
-  if (typeof window === "undefined" || !window.__TAURI_INTERNALS__) return;
+  if (typeof window === "undefined" || !window.__TAURI_INTERNALS__ || isAndroid) return;
   import("@tauri-apps/api/window")
     .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(theme === "system" ? null : theme))
     .catch((error) => console.warn("[Settings] native theme sync failed:", error));
+}
+
+function syncAndroidSystemBars(isDark: boolean) {
+  if (!isAndroid) return;
+  window.TalkioTheme?.setSystemBars(isDark);
 }
 
 function applyTheme(theme: AppSettings["theme"]) {
@@ -87,6 +93,7 @@ function applyTheme(theme: AppSettings["theme"]) {
   meta.content = themeColor;
   // Also set color-scheme for proper system UI adaptation
   root.style.colorScheme = isDark ? "dark" : "light";
+  syncAndroidSystemBars(isDark);
   syncNativeTheme(theme);
 
   // Keep both the web UI and native system bars current when following the OS.

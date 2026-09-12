@@ -15,6 +15,7 @@ import java.io.InputStreamReader
 class MainActivity : TauriActivity() {
   private val shareHelper by lazy { ShareHelper(this) }
   private val secretStoreBridge by lazy { SecretStoreBridge(this) }
+  private val themeBridge by lazy { ThemeBridge(this) }
   private var lastKeyboardInsetCss = -1
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,7 +70,12 @@ class MainActivity : TauriActivity() {
     super.onWebViewCreate(webView)
     webView.addJavascriptInterface(shareHelper, "NativeShare")
     webView.addJavascriptInterface(secretStoreBridge, "TalkioSecretStore")
+    webView.addJavascriptInterface(themeBridge, "TalkioTheme")
     installKeyboardInsetBridge(webView)
+    webView.evaluateJavascript(
+      "window.TalkioTheme && window.TalkioTheme.setSystemBars(document.documentElement.classList.contains('dark'))",
+      null
+    )
   }
 
   /**
