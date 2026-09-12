@@ -185,7 +185,10 @@
     "create": "Create",
     "muteMember": "Mute",
     "unmuteMember": "Unmute",
-    "generatedImage": "Generated image"
+    "generatedImage": "Generated image",
+    "generatingImage": "Generating image…",
+    "cancelled": "Cancelled",
+    "imageModelAttachments": "The current image model does not support attachments."
   },
   "models": {
     "title": "Models",
@@ -195,7 +198,8 @@
     "selectModels": "Select Models",
     "selectModelsHint": "Pick at least 2 models for a group chat.",
     "createGroup": "Create Group ({{count}})",
-    "manage": "Manage"
+    "manage": "Manage",
+    "imageModel": "Image model"
   },
   "personas": {
     "searchIdentities": "Search personas...",
@@ -245,6 +249,10 @@
     "updateCheckFailed": "Update check failed",
     "imageNotConfigured": "Not configured",
     "imageHint": "Configure an OpenAI-compatible /images/generations endpoint to let models draw through the generate_image tool.",
+    "defaultImageModel": "Default image model",
+    "imageModelsCount": "{{count}} available",
+    "addImageModel": "Add image model",
+    "imageModelProvider": "Image model provider",
     "sttNotConfigured": "Not configured",
     "currentModel": "Current Model",
     "sttPresets": "Quick Setup",
@@ -341,6 +349,7 @@
     "tools": "Tools",
     "reasoning": "Reasoning",
     "probe": "Probe",
+    "probeFailed": "Model capability probe failed",
     "type": "Type",
     "enabled": "Enabled",
     "customHeaders": "Custom Headers",
@@ -373,7 +382,17 @@
     "reasoningEffort_low": "Low",
     "reasoningEffort_medium": "Medium",
     "reasoningEffort_high": "High",
-    "reasoningEffort_xhigh": "XHigh"
+    "reasoningEffort_xhigh": "XHigh",
+    "reasoningEffort_max": "Max",
+    "contextWindow": "Context {{value}}",
+    "maxOutputTokens": "Max output {{value}}",
+    "reasoningLevels": "Reasoning {{value}}",
+    "reasoningBudget": "Budget {{value}} tokens",
+    "metadataSource_manual": "Manual",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "Provider API",
+    "metadataSource_probe": "Live probe",
+    "metadataSource_default": "Default"
   },
   "providers": {
     "deleteProvider": "Delete Provider",

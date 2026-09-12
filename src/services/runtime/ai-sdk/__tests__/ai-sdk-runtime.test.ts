@@ -273,6 +273,32 @@ describe("AISdkRuntime event mapping", () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({ maxRetries: 2 }));
   });
+
+  it("configures the AI SDK-managed tool loop when execution is enabled", async () => {
+    mockStreamText.mockReturnValue(makeStream([{ type: "text-delta", id: "t1", text: "done" }]));
+    const runtime = new AISdkRuntime(() => ({}) as never);
+    const executeTool = vi.fn().mockResolvedValue("ok");
+
+    await collect(
+      runtime.run(
+        makeRequest({
+          executeTool,
+          maxToolRounds: 3,
+          toolDefs: [
+            {
+              type: "function",
+              function: { name: "lookup", parameters: { type: "object" } },
+            },
+          ],
+        }),
+      ),
+    );
+
+    const options = mockStreamText.mock.calls[0][0];
+    expect(options.stopWhen).toEqual(expect.any(Function));
+    expect(options.tools).toHaveProperty("lookup");
+    expect(options.tools.lookup.execute).toEqual(expect.any(Function));
+  });
 });
 
 describe("AISdkRuntime helpers", () => {

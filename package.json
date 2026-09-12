@@ -14,7 +14,7 @@
     "sync:model-catalog": "node scripts/sync-models-dev.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:live-providers": "vitest run src/services/runtime/__tests__/provider-live.test.ts"
+    "test:live-providers": "vitest run src/services/runtime/ai-sdk/__tests__/ai-sdk-e2e.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.30",

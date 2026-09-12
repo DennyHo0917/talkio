@@ -183,7 +183,10 @@
     "generatedFile": "生成内容",
     "overwrite": "覆盖",
     "create": "新建",
-    "generatedImage": "生成的图片"
+    "generatedImage": "生成的图片",
+    "generatingImage": "正在生成图片…",
+    "cancelled": "已取消",
+    "imageModelAttachments": "当前生图模型暂不支持附件。"
   },
   "models": {
     "title": "模型",
@@ -193,7 +196,8 @@
     "selectModels": "选择模型",
     "selectModelsHint": "至少选择 2 个模型以创建群聊。",
     "createGroup": "创建群聊 ({{count}})",
-    "manage": "管理"
+    "manage": "管理",
+    "imageModel": "生图模型"
   },
   "personas": {
     "searchIdentities": "搜索角色...",
@@ -243,6 +247,10 @@
     "updateCheckFailed": "检查更新失败",
     "imageNotConfigured": "未配置",
     "imageHint": "配置一个 OpenAI 兼容的 /images/generations 端点后，模型即可通过 generate_image 工具作图。",
+    "defaultImageModel": "默认图片模型",
+    "imageModelsCount": "{{count}} 个可用",
+    "addImageModel": "添加图片模型",
+    "imageModelProvider": "图片模型供应商",
     "sttNotConfigured": "未配置",
     "currentModel": "当前模型",
     "sttPresets": "快速配置",
@@ -339,6 +347,7 @@
     "tools": "工具",
     "reasoning": "推理",
     "probe": "探测",
+    "probeFailed": "模型能力探测失败",
     "type": "类型",
     "enabled": "启用",
     "customHeaders": "自定义请求头",
@@ -371,7 +380,17 @@
     "reasoningEffort_low": "低",
     "reasoningEffort_medium": "中",
     "reasoningEffort_high": "高",
-    "reasoningEffort_xhigh": "最高"
+    "reasoningEffort_xhigh": "最高",
+    "reasoningEffort_max": "极限",
+    "contextWindow": "上下文 {{value}}",
+    "maxOutputTokens": "最大输出 {{value}}",
+    "reasoningLevels": "推理档位 {{value}}",
+    "reasoningBudget": "预算 {{value}} tokens",
+    "metadataSource_manual": "手动配置",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "供应商 API",
+    "metadataSource_probe": "实时探测",
+    "metadataSource_default": "默认值"
   },
   "providers": {
     "deleteProvider": "删除供应商",
