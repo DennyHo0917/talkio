@@ -463,6 +463,11 @@ export function SettingsPage({
               <span className="text-foreground text-[16px] font-medium">
                 {t("settings.toolApproval")}
               </span>
+              <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed">
+                {settings.toolApprovalMode === "ask"
+                  ? t("settings.toolApprovalAskHint")
+                  : t("settings.toolApprovalAutoHint")}
+              </p>
             </div>
             <button
               onClick={() =>
@@ -709,7 +714,6 @@ function RefreshAllButton() {
     </button>
   );
 }
-
 
 // ── Providers List Sub-page (1:1 RN original) ──
 

@@ -308,7 +308,9 @@
     "changeDir": "更改",
     "toolApproval": "工具调用确认",
     "toolApprovalAuto": "自动执行",
-    "toolApprovalAsk": "每次询问"
+    "toolApprovalAsk": "每次询问",
+    "toolApprovalAutoHint": "包括 edit_workspace_file 等写入工具会直接执行",
+    "toolApprovalAskHint": "包括 edit_workspace_file 等写入工具每次都会先询问"
   },
   "providerEdit": {
     "quickSelect": "快速选择",

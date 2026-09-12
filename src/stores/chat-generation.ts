@@ -25,7 +25,7 @@ import { getBuiltInToolDefs } from "../services/built-in-tools";
 import { getMcpToolDefsForIdentity, refreshMcpConnections } from "../services/mcp";
 import { generateId } from "../lib/id";
 import i18n from "../i18n";
-import { buildProviderHeaders } from "../services/provider-headers";
+import { buildProviderSessionHeaders } from "../services/provider-headers";
 import { getAdapter } from "../services/provider-adapters";
 import { resolveAdapterBaseUrl } from "../services/provider-request";
 import { NormalModelRuntime } from "../services/runtime/model-runtime";
@@ -186,7 +186,9 @@ export async function generateForParticipant(
   }
 
   const baseUrl = resolveAdapterBaseUrl(provider, model.modelId);
-  const headers = buildProviderHeaders(provider, { "Content-Type": "application/json" });
+  const headers = buildProviderSessionHeaders(provider, ctx.cid, {
+    "Content-Type": "application/json",
+  });
   await refreshMcpConnections().catch((err) =>
     console.warn("[chat-generation] MCP refresh failed:", err),
   );

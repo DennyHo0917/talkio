@@ -310,7 +310,9 @@
     "changeDir": "Change",
     "toolApproval": "Tool approval",
     "toolApprovalAuto": "Run automatically",
-    "toolApprovalAsk": "Ask every time"
+    "toolApprovalAsk": "Ask every time",
+    "toolApprovalAutoHint": "Write tools such as edit_workspace_file run without prompting",
+    "toolApprovalAskHint": "Write tools such as edit_workspace_file always ask first"
   },
   "providerEdit": {
     "quickSelect": "Quick Select",

@@ -3,6 +3,20 @@ import { getProfile } from "./provider-profiles/registry";
 
 export const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
 
+/** OpenCode-compatible endpoints need a stable session header per chat. */
+export function isOpenCodeProvider(provider: Provider): boolean {
+  if (provider.profileId === "opencode") return true;
+  try {
+    return new URL(provider.baseUrl).hostname === "opencode.ai";
+  } catch {
+    return false;
+  }
+}
+
+export function buildSessionHeaders(provider: Provider, sessionId: string): Record<string, string> {
+  return isOpenCodeProvider(provider) ? { "x-opencode-session": sessionId } : {};
+}
+
 export function isAzureOpenAIProvider(provider: Provider): boolean {
   return provider.profileId === "azure-openai" || provider.type === "azure-openai";
 }

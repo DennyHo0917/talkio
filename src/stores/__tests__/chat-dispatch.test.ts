@@ -81,6 +81,7 @@ vi.mock("../settings-store", () => ({
 
 vi.mock("../../services/provider-headers", () => ({
   buildProviderHeaders: mockBuildProviderHeaders,
+  buildProviderSessionHeaders: mockBuildProviderHeaders,
 }));
 
 vi.mock("../chat-generation", async () => {
