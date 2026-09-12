@@ -9,6 +9,7 @@ import {
   resolveProviderResourceUrl,
 } from "./provider-request";
 import { getLanguageModel } from "./runtime/ai-sdk/ai-sdk-runtime";
+import { z } from "zod";
 
 export interface ProbeResult {
   capabilities: Partial<ModelCapabilities>;
@@ -41,15 +42,24 @@ export interface ProviderModelPayload {
   context_length?: number;
 }
 
-function objectArray(value: unknown, key?: string): Record<string, unknown>[] {
-  if (!value || typeof value !== "object") return [];
-  const candidate = key ? (value as Record<string, unknown>)[key] : value;
-  return Array.isArray(candidate)
-    ? candidate.filter(
-        (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
-      )
-    : [];
-}
+const modelPayloadSchema = z
+  .object({
+    id: z.string().min(1),
+    object: z.string().optional(),
+    context_length: z.number().finite().optional(),
+  })
+  .passthrough();
+const modelListSchema = z.union([
+  z.object({ data: z.array(modelPayloadSchema) }).passthrough(),
+  z.array(modelPayloadSchema),
+]);
+const geminiModelSchema = z.object({ name: z.string().min(1) }).passthrough();
+const geminiListSchema = z.object({ models: z.array(geminiModelSchema) }).passthrough();
+const ollamaModelSchema = z
+  .object({ name: z.string().optional(), model: z.string().optional() })
+  .passthrough()
+  .refine((value) => Boolean(value.name || value.model), "model name is missing");
+const ollamaListSchema = z.object({ models: z.array(ollamaModelSchema) }).passthrough();
 
 function defaultCapabilities(): ModelCapabilities {
   return {
@@ -99,32 +109,20 @@ export async function fetchProviderModels(provider: Provider): Promise<ProviderM
   if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
   const json: unknown = await res.json();
   if (provider.apiFormat === "gemini-generate-content") {
-    return objectArray(json, "models")
-      .map((model) => (typeof model.name === "string" ? model.name.replace(/^models\//, "") : ""))
-      .filter(Boolean)
+    const parsed = geminiListSchema.parse(json);
+    return parsed.models
+      .map((model) => model.name.replace(/^models\//, ""))
       .map((id) => ({ id, object: "model" }));
   }
   if (profileId === "ollama") {
-    return objectArray(json, "models")
-      .map((model) =>
-        typeof model.name === "string"
-          ? model.name
-          : typeof model.model === "string"
-            ? model.model
-            : "",
-      )
-      .filter(Boolean)
+    const parsed = ollamaListSchema.parse(json);
+    return parsed.models
+      .map((model) => model.name ?? model.model!)
       .map((id) => ({ id, object: "model" }));
   }
-  const models =
-    objectArray(json, "data").length > 0 ? objectArray(json, "data") : objectArray(json);
-  return models
-    .filter((model) => typeof model.id === "string")
-    .map((model) => ({
-      id: model.id as string,
-      object: typeof model.object === "string" ? model.object : undefined,
-      context_length: typeof model.context_length === "number" ? model.context_length : undefined,
-    }));
+  const parsed = modelListSchema.parse(json);
+  const models = Array.isArray(parsed) ? parsed : parsed.data;
+  return models.map(({ id, object, context_length }) => ({ id, object, context_length }));
 }
 
 export async function testProviderConnection(provider: Provider): Promise<boolean> {

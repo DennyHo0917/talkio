@@ -9,6 +9,16 @@ export type McpConnectionStatus = "idle" | "connecting" | "connected" | "error";
 export type McpErrorCode = "NETWORK" | "AUTH" | "TIMEOUT" | "SERVER_ERROR" | "UNKNOWN";
 
 function classifyError(err: unknown): McpErrorCode {
+  if (err && typeof err === "object") {
+    const status =
+      (err as { status?: unknown; statusCode?: unknown }).status ??
+      (err as { statusCode?: unknown }).statusCode;
+    if (typeof status === "number") {
+      if (status === 401 || status === 403) return "AUTH";
+      if (status === 408 || status === 504) return "TIMEOUT";
+      if (status >= 500 && status <= 599) return "SERVER_ERROR";
+    }
+  }
   const msg = err instanceof Error ? err.message : String(err);
   if (
     msg.includes("401") ||

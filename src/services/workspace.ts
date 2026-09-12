@@ -2,6 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import ignore from "ignore";
 import { diff_match_patch } from "diff-match-patch";
+import { normalizeRelativePath } from "../lib/path-utils";
 
 const DEFAULT_MAX_ENTRIES = 300;
 const DEFAULT_MAX_DEPTH = 3;
@@ -109,11 +110,11 @@ function getRelativePath(root: string, fullPath: string): string {
 }
 
 export function sanitizeRelativePath(relativePath: string): string | null {
-  let p = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-  const parts = p.split("/").filter((part) => part && part !== "." && part !== "..");
-  if (parts.length === 0) return null;
+  const normalized = normalizeRelativePath(relativePath);
+  if (!normalized) return null;
+  const parts = normalized.split("/");
   if (parts.some((part) => shouldIgnoreName(part))) return null;
-  return parts.join("/");
+  return normalized;
 }
 
 export async function readWorkspaceTree(

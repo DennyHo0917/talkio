@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import type { Conversation, Message } from "../types";
 import { MarkdownRenderer } from "../components/shared/MarkdownRenderer";
 import { saveOrShareBlobs } from "./file-download";
+import { sanitizeFilename as sanitizeExportFilename } from "../lib/filename";
 
 const EXPORT_WIDTH = 900;
 const MAX_SLICE_HEIGHT = 8000;
@@ -246,5 +247,5 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function sanitizeFilename(value: string): string {
-  return value.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50) || "conversation";
+  return sanitizeExportFilename(value);
 }

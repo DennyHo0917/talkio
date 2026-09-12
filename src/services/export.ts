@@ -2,6 +2,7 @@ import type { Conversation, Message } from "../types";
 import { saveOrShareFile } from "./file-download";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { sanitizeFilename } from "../lib/filename";
 
 export function buildConversationMarkdown(args: {
   title: string;
@@ -35,7 +36,7 @@ export function buildConversationMarkdown(args: {
 }
 
 export async function downloadMarkdownFile(filenameBase: string, markdown: string) {
-  const filename = `${filenameBase.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50)}.md`;
+  const filename = `${sanitizeFilename(filenameBase)}.md`;
   await saveOrShareFile(filename, markdown, {
     mimeType: "text/markdown",
     filterName: "Markdown",
@@ -126,7 +127,7 @@ export async function exportConversationAsPdf(args: {
   ${messagesHtml}
 </body></html>`;
 
-  const filename = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50)}.html`;
+  const filename = `${sanitizeFilename(title)}.html`;
   await saveOrShareFile(filename, html, {
     mimeType: "text/html",
     filterName: "HTML",

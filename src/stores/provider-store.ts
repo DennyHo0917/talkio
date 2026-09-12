@@ -30,9 +30,52 @@ import {
 } from "../services/provider-profiles/model-catalog";
 import { useSettingsStore } from "./settings-store";
 import { inferImageGenerationApi } from "../services/image-model";
+import { z } from "zod";
 
 const PROVIDERS_KEY = "providers";
 const MODELS_KEY = "models";
+
+const persistedProviderSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string(),
+    type: z.enum(["openai", "anthropic", "gemini", "azure-openai"]),
+    apiFormat: z
+      .enum(["chat-completions", "responses", "anthropic-messages", "gemini-generate-content"])
+      .optional(),
+    profileId: z.string().optional(),
+    baseUrl: z.string().min(1),
+    apiKey: z.string().optional().default(""),
+    apiVersion: z.string().optional(),
+    customHeaders: z.array(z.object({ name: z.string(), value: z.string() })).default([]),
+    enabled: z.boolean().default(true),
+    status: z.enum(["connected", "disconnected", "error", "pending"]).default("pending"),
+    createdAt: z.string(),
+  })
+  .passthrough();
+
+const persistedModelSchema = z
+  .object({
+    id: z.string().min(1),
+    providerId: z.string().min(1),
+    modelId: z.string().min(1),
+  })
+  .passthrough();
+
+function readPersistedProviders(): Provider[] {
+  const raw = kvStore.getObject<unknown>(PROVIDERS_KEY);
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((value) => {
+    const result = persistedProviderSchema.safeParse(value);
+    return result.success ? [result.data as Provider] : [];
+  });
+}
+
+function readPersistedModels(): unknown[] {
+  const raw = kvStore.getObject<unknown>(MODELS_KEY);
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((value) => persistedModelSchema.safeParse(value).success);
+}
 
 interface ProviderState {
   providers: Provider[];
@@ -326,8 +369,8 @@ async function hydrateProviderSecrets(providers: Provider[]): Promise<Provider[]
 }
 
 function loadInitial() {
-  const providers = kvStore.getObject<Provider[]>(PROVIDERS_KEY) ?? [];
-  const rawModels = kvStore.getObject<any[]>(MODELS_KEY) ?? [];
+  const providers = readPersistedProviders();
+  const rawModels = readPersistedModels();
   const models: Model[] = rawModels.map(normalizeModel).map((model) => {
     const provider = providers.find((item) => item.id === model.providerId);
     return provider ? applyCatalogMetadata(model, provider) : model;
@@ -505,8 +548,8 @@ export const useProviderStore = create<ProviderState>((set, get) => {
     },
 
     loadFromStorage: () => {
-      const providers = kvStore.getObject<Provider[]>(PROVIDERS_KEY) ?? [];
-      const rawModels = kvStore.getObject<any[]>(MODELS_KEY) ?? [];
+      const providers = readPersistedProviders();
+      const rawModels = readPersistedModels();
       const models: Model[] = rawModels.map(normalizeModel).map((model) => {
         const provider = providers.find((item) => item.id === model.providerId);
         return provider ? applyCatalogMetadata(model, provider) : model;

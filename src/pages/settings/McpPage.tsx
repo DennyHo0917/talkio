@@ -13,6 +13,13 @@ import { refreshMcpConnections } from "../../services/mcp";
 import { useBuiltInToolsStore } from "../../stores/built-in-tools-store";
 import { McpServerCard } from "./McpServerCard";
 import { McpServerForm } from "./McpServerForm";
+import { z } from "zod";
+
+const mcpImportSchema = z.union([
+  z.object({ mcpServers: z.record(z.string(), z.record(z.string(), z.unknown())) }).passthrough(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
 
 // ── MCP Tools Page (1:1 RN native style) ──
 
@@ -57,15 +64,19 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
   const [isImporting, setIsImporting] = useState(false);
 
   const handleImportJson = useCallback(async () => {
-    let parsed: any;
+    let parsed: z.infer<typeof mcpImportSchema>;
     try {
-      parsed = JSON.parse(importJson.trim());
+      parsed = mcpImportSchema.parse(JSON.parse(importJson.trim()));
     } catch {
       appAlert(`${t("common.error")}: ${t("personas.importInvalidJson")}`);
       return;
     }
 
     const stdioOk = isStdioAvailable();
+    const importedServers =
+      !Array.isArray(parsed) && "mcpServers" in parsed && parsed.mcpServers
+        ? parsed.mcpServers
+        : undefined;
     let toImport: Array<{
       name: string;
       type?: "http" | "stdio";
@@ -76,8 +87,8 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
       env?: Record<string, string>;
     }> = [];
 
-    if (parsed?.mcpServers && typeof parsed.mcpServers === "object") {
-      for (const [key, val] of Object.entries(parsed.mcpServers)) {
+    if (importedServers) {
+      for (const [key, val] of Object.entries(importedServers)) {
         const v = val as Record<string, unknown>;
         const url = String((v.url ?? v.endpoint ?? "") as string);
         const hasCommand = !!v.command;
@@ -114,7 +125,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
       }
 
       if (toImport.length === 0) {
-        const isCommandConfig = Object.values(parsed.mcpServers).some(
+        const isCommandConfig = Object.values(importedServers).some(
           (v: any) => v?.command || v?.args,
         );
         appAlert(

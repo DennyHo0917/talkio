@@ -5,6 +5,7 @@
  * Security: paths are sanitized to prevent directory traversal (../).
  * Only writes within the configured workspace directory.
  */
+import { normalizeRelativePath } from "../lib/path-utils";
 
 export interface WrittenFile {
   path: string; // relative path within workspace
@@ -42,11 +43,7 @@ export function parseFileBlocks(text: string): { path: string; content: string }
  * Removes leading slashes, ../ components, and normalizes separators.
  */
 function sanitizePath(relativePath: string): string | null {
-  let p = relativePath.replace(/\\/g, "/");
-  p = p.replace(/^\/+/, "");
-  const parts = p.split("/").filter((part) => part !== ".." && part !== "." && part !== "");
-  if (parts.length === 0) return null;
-  return parts.join("/");
+  return normalizeRelativePath(relativePath);
 }
 
 /** Build an absolute path from workspace root + sanitized relative path. */
