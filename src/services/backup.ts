@@ -245,21 +245,6 @@ function validateBackupData(data: Record<string, unknown>): BackupData | LegacyB
   return parsed as unknown as BackupData | LegacyBackupData;
 }
 
-function requireRecordsWithStringFields(
-  data: Record<string, unknown>,
-  field: string,
-  stringFields: string[],
-): Record<string, unknown>[] {
-  const value = data[field];
-  if (!Array.isArray(value)) throw new Error(`Backup field ${field} must be an array`);
-  return value.map((item, index) => {
-    if (!isRecord(item) || stringFields.some((key) => typeof item[key] !== "string")) {
-      throw new Error(`Backup field ${field} has an invalid item at index ${index}`);
-    }
-    return item;
-  });
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

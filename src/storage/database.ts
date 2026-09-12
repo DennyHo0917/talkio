@@ -27,7 +27,9 @@ async function getDb() {
 async function createInMemoryDb() {
   const { default: initSqlJs } = await import("sql.js");
   const SQL = await initSqlJs({
-    locateFile: (file) => new URL(`sql.js/dist/${file}`, import.meta.url).toString(),
+    // Keep the asset path static so Vite emits the WASM file instead of
+    // interpreting the template URL as an import glob.
+    locateFile: () => new URL("sql.js/dist/sql-wasm.wasm", import.meta.url).toString(),
   });
   const sqlite = new SQL.Database();
   const bind = (sql: string, params: any[]) => {

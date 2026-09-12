@@ -287,7 +287,14 @@ export async function editWorkspaceFile(
   const idx = fileContent.indexOf(oldContent);
   if (idx === -1) {
     const dmp = new diff_match_patch();
-    const fuzzyIndex = dmp.match_main(fileContent, oldContent, 0);
+    let fuzzyIndex = -1;
+    try {
+      // diff-match-patch's Bitap matcher rejects patterns longer than 32
+      // characters; let the existing line-based fallback handle those.
+      if (oldContent.length <= 32) fuzzyIndex = dmp.match_main(fileContent, oldContent, 0);
+    } catch {
+      fuzzyIndex = -1;
+    }
     if (fuzzyIndex >= 0) {
       const [patched, applied] = dmp.patch_apply(
         dmp.patch_make(oldContent, newContent),
