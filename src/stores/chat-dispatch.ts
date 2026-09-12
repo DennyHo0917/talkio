@@ -17,7 +17,7 @@ import {
 } from "../storage/database";
 import { notifyDbChange } from "../hooks/useDatabase";
 import { useProviderStore } from "./provider-store";
-import { buildProviderHeaders } from "../services/provider-headers";
+import { buildProviderSessionHeaders } from "../services/provider-headers";
 import { useSettingsStore } from "./settings-store";
 import {
   generateForParticipant,
@@ -61,7 +61,9 @@ export async function preComputeCompression(
   if (tokenCount <= compressionSettings.contextCompressionThreshold) return null;
 
   const baseUrl = firstProvider.baseUrl.replace(/\/+$/, "");
-  const headers = buildProviderHeaders(firstProvider, { "Content-Type": "application/json" });
+  const headers = buildProviderSessionHeaders(firstProvider, cid, {
+    "Content-Type": "application/json",
+  });
   const result = await compressIfNeeded(sampleApiMessages, {
     maxTokens: compressionSettings.contextCompressionThreshold,
     keepRecentCount: 6,
@@ -97,9 +99,11 @@ export async function dispatchMessageGeneration(args: {
   activeBranchId: string | null;
   getCurrentConversationId: () => string | null;
   abortControllers: Map<string, AbortController>;
+  participantAbortControllers: Map<string, AbortController>;
   streamingMessages: Map<string, StreamingState>;
   setStoreState: (partial: {
     isGenerating?: boolean;
+    canSkipCurrent?: boolean;
     streamingMessages?: StreamingState[];
   }) => void;
 }): Promise<void> {
@@ -111,6 +115,7 @@ export async function dispatchMessageGeneration(args: {
     activeBranchId,
     getCurrentConversationId,
     abortControllers,
+    participantAbortControllers,
     streamingMessages,
     setStoreState,
   } = args;
@@ -185,7 +190,9 @@ export async function dispatchMessageGeneration(args: {
 
   const abortController = new AbortController();
   abortControllers.set(cid, abortController);
-  if (cid === getCurrentConversationId()) setStoreState({ isGenerating: true });
+  if (cid === getCurrentConversationId()) {
+    setStoreState({ isGenerating: true, canSkipCurrent: false });
+  }
 
   const workspaceContext = conversation.workspaceDir
     ? await buildWorkspaceContextBundle(conversation.workspaceDir, text, { includeTree: true })
@@ -256,11 +263,29 @@ export async function dispatchMessageGeneration(args: {
       } else {
         for (let index = 0; index < currentTargets.length; index++) {
           if (abortController.signal.aborted) break;
-          const content = await generateForParticipant(
-            ctx,
-            currentTargets[index],
-            globalMsgIndex++,
-          );
+          const participantAbortController = new AbortController();
+          const abortParticipant = () => participantAbortController.abort();
+          if (abortController.signal.aborted) abortParticipant();
+          else abortController.signal.addEventListener("abort", abortParticipant, { once: true });
+
+          const canSkip = index < currentTargets.length - 1;
+          if (canSkip) participantAbortControllers.set(cid, participantAbortController);
+          if (cid === getCurrentConversationId()) setStoreState({ canSkipCurrent: canSkip });
+
+          let content: string;
+          try {
+            content = await generateForParticipant(
+              { ...ctx, abortController: participantAbortController },
+              currentTargets[index],
+              globalMsgIndex++,
+            );
+          } finally {
+            abortController.signal.removeEventListener("abort", abortParticipant);
+            if (participantAbortControllers.get(cid) === participantAbortController) {
+              participantAbortControllers.delete(cid);
+            }
+            if (cid === getCurrentConversationId()) setStoreState({ canSkipCurrent: false });
+          }
           responses.push({ participantId: currentTargets[index].id, content });
         }
       }
@@ -294,7 +319,11 @@ export async function dispatchMessageGeneration(args: {
         const activeStreams = Array.from(streamingMessages.values()).filter(
           (state) => state.cid === cid,
         );
-        setStoreState({ isGenerating: false, streamingMessages: activeStreams });
+        setStoreState({
+          isGenerating: false,
+          canSkipCurrent: false,
+          streamingMessages: activeStreams,
+        });
       }
     }
   }

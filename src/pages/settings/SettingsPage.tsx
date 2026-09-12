@@ -105,10 +105,12 @@ export function SectionHeader({ label }: { label: string }) {
 export function SettingsPage({
   onSubPageChange,
   initialProviderEditId,
+  onInitialProviderEditClose,
 }: {
   onSubPageChange?: (inSubPage: boolean) => void;
   /** Desktop deep-link: open this provider's edit page on mount (from Models "Manage"). */
   initialProviderEditId?: string;
+  onInitialProviderEditClose?: () => void;
 } = {}) {
   const { t } = useTranslation();
   const { confirm } = useConfirm();
@@ -176,9 +178,17 @@ export function SettingsPage({
     push({
       id: `provider-edit-${provider.id}`,
       title: provider.name,
-      component: <ProviderEditPage editId={provider.id} onClose={pop} />,
+      component: (
+        <ProviderEditPage
+          editId={provider.id}
+          onClose={() => {
+            pop();
+            onInitialProviderEditClose?.();
+          }}
+        />
+      ),
     });
-  }, [initialProviderEditId, providers, push, pop]);
+  }, [initialProviderEditId, onInitialProviderEditClose, providers, push, pop]);
 
   const top = subPageStack.length > 0 ? subPageStack[subPageStack.length - 1] : null;
 
@@ -459,6 +469,11 @@ export function SettingsPage({
               <span className="text-foreground text-[16px] font-medium">
                 {t("settings.toolApproval")}
               </span>
+              <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed">
+                {settings.toolApprovalMode === "ask"
+                  ? t("settings.toolApprovalAskHint")
+                  : t("settings.toolApprovalAutoHint")}
+              </p>
             </div>
             <button
               onClick={() =>

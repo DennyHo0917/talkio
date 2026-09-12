@@ -61,6 +61,8 @@ export function ChatView({
   const sendMessage = useChatStore((s: ChatState) => s.sendMessage);
   const generateImage = useChatStore((s: ChatState) => s.generateImage);
   const stopGeneration = useChatStore((s: ChatState) => s.stopGeneration);
+  const skipCurrentParticipant = useChatStore((s: ChatState) => s.skipCurrentParticipant);
+  const canSkipCurrent = useChatStore((s: ChatState) => s.canSkipCurrent);
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [promoteSource, setPromoteSource] = useState<Message | null>(null);
   const [showPromoteDialog, setShowPromoteDialog] = useState(false);
@@ -82,6 +84,7 @@ export function ChatView({
   const imageOnly = usesImageApi;
 
   const { scrollRef, contentRef, scrollToBottom, isAtBottom } = useStickToBottom({
+    initial: "instant",
     resize: "instant",
   });
 
@@ -371,6 +374,8 @@ export function ChatView({
           imageOnly={imageOnly}
           isGenerating={isGenerating}
           onStop={stopGeneration}
+          onSkip={skipCurrentParticipant}
+          canSkip={canSkipCurrent}
           isMobile={isMobile}
           modelName={modelName}
           onSwitchModel={onSwitchModel}
@@ -483,6 +488,8 @@ export function ChatView({
         imageOnly={imageOnly}
         isGenerating={isGenerating}
         onStop={stopGeneration}
+        onSkip={skipCurrentParticipant}
+        canSkip={canSkipCurrent}
         isMobile={isMobile}
         modelName={modelName}
         onSwitchModel={onSwitchModel}

@@ -1,5 +1,6 @@
 import type { CustomHeader, Provider, ApiFormat, ProviderType } from "../types";
 import { getProfile } from "./provider-profiles/registry";
+import { buildSessionHeaders } from "./provider-request";
 
 function build(
   apiKey: string,
@@ -61,4 +62,16 @@ export function buildProviderHeadersFromRaw(args: {
     args.profileId,
     args.providerType,
   );
+}
+
+/** Build request headers for a conversation-scoped chat request. */
+export function buildProviderSessionHeaders(
+  provider: Provider,
+  sessionId: string,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  return {
+    ...buildProviderHeaders(provider, extra),
+    ...buildSessionHeaders(provider, sessionId),
+  };
 }

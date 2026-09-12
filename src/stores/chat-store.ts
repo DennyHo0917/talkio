@@ -22,6 +22,7 @@ import {
   clearConversationRuntime,
   deleteAllConversationRecords,
   deriveConversationViewState,
+  skipCurrentParticipant,
   stopConversationGeneration,
 } from "./chat-store-core";
 import {
@@ -55,6 +56,7 @@ import { useProviderStore } from "./provider-store";
 
 // Per-conversation generation tracking (module-level to avoid zustand serialization)
 const _abortControllers = new Map<string, AbortController>();
+const _participantAbortControllers = new Map<string, AbortController>();
 const _streamingMessages = new Map<string, StreamingState>();
 let _autoDiscussSession = 0;
 let _autoDiscussConversationId: string | null = null;
@@ -75,6 +77,7 @@ export interface ChatState {
   activeBranchId: string | null;
   autoDiscussRemaining: number;
   autoDiscussTotalRounds: number;
+  canSkipCurrent: boolean;
 
   // In-memory streaming state — not persisted, used for rAF updates
   streamingMessages: StreamingState[];
@@ -90,6 +93,7 @@ export interface ChatState {
   sendMessage: (text: string, images?: string[], options?: SendMessageOptions) => Promise<void>;
   generateImage: (prompt: string, modelId: string) => Promise<void>;
   stopGeneration: () => void;
+  skipCurrentParticipant: () => void;
   startAutoDiscuss: (rounds: number, topicText?: string) => Promise<void>;
   stopAutoDiscuss: () => void;
   regenerateMessage: (messageId: string) => Promise<void>;
@@ -144,6 +148,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeBranchId: null,
   autoDiscussRemaining: 0,
   autoDiscussTotalRounds: 0,
+  canSkipCurrent: false,
   streamingMessages: [],
 
   createConversation: async (
@@ -156,20 +161,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       extraModelIds,
       membersWithIdentity,
     );
-    set({ currentConversationId: conversation.id });
+    set({ currentConversationId: conversation.id, canSkipCurrent: false });
     return conversation;
   },
 
   deleteConversation: async (id: string) => {
     await deleteConversationRecord(id);
     if (get().currentConversationId === id) {
-      set({ currentConversationId: null });
+      set({ currentConversationId: null, canSkipCurrent: false });
     }
   },
 
   deleteAllConversations: async () => {
     await deleteAllConversationRecords();
-    set({ currentConversationId: null, activeBranchId: null });
+    set({ currentConversationId: null, activeBranchId: null, canSkipCurrent: false });
   },
 
   setCurrentConversation: (id: string | null) => {
@@ -177,6 +182,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       id,
       get().currentConversationId,
       _abortControllers,
+      _participantAbortControllers,
       _streamingMessages,
     );
     if (next) set(next);
@@ -198,6 +204,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeBranchId: requestedBranchId === undefined ? get().activeBranchId : requestedBranchId,
       getCurrentConversationId: () => get().currentConversationId,
       abortControllers: _abortControllers,
+      participantAbortControllers: _participantAbortControllers,
       streamingMessages: _streamingMessages,
       setStoreState: (partial) => set(partial),
     });
@@ -302,11 +309,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   stopGeneration: () => {
-    const next = stopConversationGeneration(get().currentConversationId, _abortControllers);
+    const conversationId = get().currentConversationId;
+    const next = stopConversationGeneration(conversationId, _abortControllers);
+    if (conversationId) _participantAbortControllers.delete(conversationId);
     if (next) set(next);
     // Any tool calls awaiting user approval become moot — reject them so the
     // generation loop can unwind instead of hanging on a dialog.
     toolApproval.rejectAll();
+  },
+
+  skipCurrentParticipant: () => {
+    const conversationId = get().currentConversationId;
+    if (!skipCurrentParticipant(conversationId, _participantAbortControllers)) return;
+    set({ canSkipCurrent: false });
+    if (conversationId) toolApproval.rejectConversation(conversationId);
   },
 
   startAutoDiscuss: async (rounds: number, topicText?: string) => {
@@ -338,7 +354,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? _abortControllers.get(_autoDiscussConversationId)
       : undefined;
     controller?.abort();
+    if (_autoDiscussConversationId) {
+      _participantAbortControllers.delete(_autoDiscussConversationId);
+    }
     _autoDiscussConversationId = null;
+    set({ canSkipCurrent: false });
   },
 
   regenerateMessage: async (messageId: string) => {
@@ -379,6 +399,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId,
       get().currentConversationId,
       _abortControllers,
+      _participantAbortControllers,
       _streamingMessages,
     );
     toolApproval.rejectConversation(conversationId);

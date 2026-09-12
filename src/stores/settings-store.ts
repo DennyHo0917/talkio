@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { kvStore } from "../storage/kv-store";
 import type { ToolApprovalMode } from "../services/tool-approval";
+import { isAndroid } from "../lib/platform";
 
 export interface AppSettings {
   language: "system" | "en" | "zh";
@@ -59,15 +60,30 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const SETTINGS_KEY = "settings";
 
+let removeSystemThemeListener: (() => void) | null = null;
+
+function syncNativeTheme(theme: AppSettings["theme"]) {
+  if (typeof window === "undefined" || !window.__TAURI_INTERNALS__ || isAndroid) return;
+  import("@tauri-apps/api/window")
+    .then(({ getCurrentWindow }) => getCurrentWindow().setTheme(theme === "system" ? null : theme))
+    .catch((error) => console.warn("[Settings] native theme sync failed:", error));
+}
+
+function syncAndroidSystemBars(isDark: boolean) {
+  if (!isAndroid) return;
+  window.TalkioTheme?.setSystemBars(isDark);
+}
+
 function applyTheme(theme: AppSettings["theme"]) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
   if (theme === "dark") {
     root.classList.add("dark");
   } else if (theme === "light") {
     root.classList.remove("dark");
   } else {
-    root.classList.toggle("dark", window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.classList.toggle("dark", prefersDark.matches);
   }
   // Update status bar / theme-color to match background for mobile browsers & Tauri Android
   const isDark = root.classList.contains("dark");
@@ -81,6 +97,24 @@ function applyTheme(theme: AppSettings["theme"]) {
   meta.content = themeColor;
   // Also set color-scheme for proper system UI adaptation
   root.style.colorScheme = isDark ? "dark" : "light";
+  syncAndroidSystemBars(isDark);
+  syncNativeTheme(theme);
+
+  // Keep both the web UI and native system bars current when following the OS.
+  removeSystemThemeListener?.();
+  removeSystemThemeListener = null;
+  if (theme === "system") {
+    const onChange = () => applyTheme("system");
+    prefersDark.addEventListener?.("change", onChange);
+    // Older WebViews expose the legacy listener API only.
+    if (!prefersDark.addEventListener && prefersDark.addListener) prefersDark.addListener(onChange);
+    removeSystemThemeListener = () => {
+      prefersDark.removeEventListener?.("change", onChange);
+      if (!prefersDark.removeEventListener && prefersDark.removeListener) {
+        prefersDark.removeListener(onChange);
+      }
+    };
+  }
 }
 
 function loadInitialSettings(): AppSettings {

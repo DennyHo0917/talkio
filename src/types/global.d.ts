@@ -17,5 +17,9 @@ declare global {
       get(account: string): string;
       delete(account: string): string;
     };
+    /** Android system-bar theme bridge exposed by MainActivity. */
+    TalkioTheme?: {
+      setSystemBars(dark: boolean): void;
+    };
   }
 }
