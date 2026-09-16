@@ -26,6 +26,7 @@ import { useIdentityStore } from "../../stores/identity-store";
 import type { Conversation } from "../../types";
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { useConfirm } from "../shared/ConfirmDialogProvider";
+import { BatchGroupMembersDialog } from "../shared/BatchGroupMembersDialog";
 import i18n from "../../i18n";
 
 // ── Tab Icons ──
@@ -151,7 +152,7 @@ export { MobileChatDetail } from "./MobileChatDetail";
 
 // ── Chats List (1:1 RN original) ──
 
-type FilterType = "all" | "single" | "group";
+type FilterType = "all" | "single" | "group" | "archived";
 
 function MobileConversationList({
   onNavigateToExperts,
@@ -170,6 +171,7 @@ function MobileConversationList({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
+  const [showBatchMembers, setShowBatchMembers] = useState(false);
 
   const hasProviders = providers.some(
     (p) => (p.status as string) === "active" || p.status === "connected",
@@ -178,6 +180,7 @@ function MobileConversationList({
   const filtered = useMemo(
     () =>
       conversations.filter((c: Conversation) => {
+        if (filter === "archived" ? !c.archived : c.archived) return false;
         if (filter === "single" && c.type !== "single") return false;
         if (filter === "group" && c.type !== "group") return false;
         if (searchQuery) {
@@ -200,6 +203,14 @@ function MobileConversationList({
             {t("tabs.chats")}
           </h1>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t("batchMembers.title")}
+              onClick={() => setShowBatchMembers(true)}
+              className="text-primary p-2"
+            >
+              <IoPeopleOutline size={22} />
+            </button>
             <button
               type="button"
               onClick={() => mobileNav?.pushAddMember()}
@@ -248,7 +259,7 @@ function MobileConversationList({
       {/* Filter Pills (1:1 RN — filters by conv.type) */}
       <div className="px-4 pb-3">
         <div className="flex gap-2">
-          {(["all", "single", "group"] as FilterType[]).map((f) => (
+          {(["all", "single", "group", "archived"] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -263,35 +274,59 @@ function MobileConversationList({
                 ? t("chats.filterAll")
                 : f === "single"
                   ? t("chats.filterSingle")
-                  : t("chats.filterGroups")}
+                  : f === "group"
+                    ? t("chats.filterGroups")
+                    : t("chats.archived")}
             </button>
           ))}
         </div>
       </div>
 
+      <BatchGroupMembersDialog
+        open={showBatchMembers}
+        onClose={() => setShowBatchMembers(false)}
+        conversations={conversations}
+      />
       {/* List */}
       <div className="flex flex-1 flex-col overflow-y-auto">
         {filtered.length === 0 ? (
-          <OnboardingOrEmpty
-            hasProviders={hasProviders}
-            onNew={onNavigateToExperts}
-            onNavigateToSettings={onNavigateToSettings}
-          />
+          filter === "archived" || searchQuery ? (
+            <p className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-center text-sm">
+              {filter === "archived" ? t("chats.noArchived") : t("chats.noResults")}
+            </p>
+          ) : (
+            <OnboardingOrEmpty
+              hasProviders={hasProviders}
+              onNew={onNavigateToExperts}
+              onNavigateToSettings={onNavigateToSettings}
+            />
+          )
         ) : (
           filtered.map((conv) => (
-            <ConversationItem
-              key={conv.id}
-              conversation={conv}
-              onSelect={() => mobileNav?.pushChat(conv.id)}
-              onDelete={async () => {
-                const ok = await confirm({
-                  title: t("chat.deleteConversation"),
-                  description: t("chat.deleteConversationConfirm"),
-                  destructive: true,
-                });
-                if (ok) deleteConversation(conv.id);
-              }}
-            />
+            <div key={conv.id} className="flex items-center">
+              <ConversationItem
+                key={conv.id}
+                conversation={conv}
+                onSelect={() => mobileNav?.pushChat(conv.id)}
+                onDelete={async () => {
+                  const ok = await confirm({
+                    title: t("chat.deleteConversation"),
+                    description: t("chat.deleteConversationConfirm"),
+                    destructive: true,
+                  });
+                  if (ok) deleteConversation(conv.id);
+                }}
+              />
+              <button
+                type="button"
+                className="text-primary shrink-0 px-3 py-2 text-xs"
+                onClick={() =>
+                  useChatStore.getState().setConversationArchived(conv.id, !conv.archived)
+                }
+              >
+                {conv.archived ? t("chat.restoreConversation") : t("chat.archiveConversation")}
+              </button>
+            </div>
           ))
         )}
       </div>

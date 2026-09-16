@@ -22,7 +22,10 @@
     "add": "Add",
     "success": "Success",
     "selected": "Selected",
-    "remove": "Remove"
+    "remove": "Remove",
+    "next": "Next",
+    "back": "Back",
+    "processing": "Processing..."
   },
   "tabs": {
     "chats": "Chats",
@@ -43,6 +46,9 @@
     "filterAll": "All",
     "filterSingle": "Single",
     "filterGroups": "Groups",
+    "archived": "Archived",
+    "activeConversations": "Active chats",
+    "noArchived": "No archived conversations",
     "noConversations": "No conversations yet",
     "goToModels": "Go to Models tab to start chatting",
     "startConversation": "Start a conversation",
@@ -51,6 +57,21 @@
     "reasoning": "Reasoning",
     "vision": "Vision",
     "noResults": "No matching conversations"
+  },
+  "batchMembers": {
+    "title": "Manage group members in bulk",
+    "add": "Add members",
+    "remove": "Remove members",
+    "noGroups": "No groups available",
+    "preview": "Preview changes",
+    "previewSummary": "{{groups}} target groups, {{members}} selected members",
+    "addCount": "Add {{count}}",
+    "removeCount": "Remove {{count}}",
+    "updatedCount": "Changed {{count}} members",
+    "noChange": "No change (already present or absent)",
+    "conversationMissing": "Group no longer exists",
+    "notGroup": "Conversation is no longer a group",
+    "generationInProgress": "This group is generating a reply. Stop it before changing members."
   },
   "chat": {
     "you": "You",
@@ -112,6 +133,8 @@
     "translate": "Translate",
     "summarize": "Summarize",
     "rename": "Rename",
+    "archiveConversation": "Archive conversation",
+    "restoreConversation": "Restore conversation",
     "addMember": "Add Member",
     "duplicateGroup": "Duplicate Group",
     "selectRole": "Select Role",

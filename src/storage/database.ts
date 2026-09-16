@@ -85,6 +85,7 @@ function rowToConversation(row: any): Conversation {
     lastMessage: row.lastMessage ?? null,
     lastMessageAt: row.lastMessageAt ?? null,
     pinned: row.pinned === 1,
+    archived: row.archived === 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     workspaceDir: row.workspaceDir ?? undefined,
@@ -146,6 +147,7 @@ export async function initDatabase(): Promise<void> {
       lastMessage TEXT,
       lastMessageAt TEXT,
       pinned INTEGER NOT NULL DEFAULT 0,
+      archived INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     )
@@ -165,6 +167,11 @@ export async function initDatabase(): Promise<void> {
   // Migration: add groupSystemPrompt column
   try {
     await db.execute(`ALTER TABLE conversations ADD COLUMN groupSystemPrompt TEXT`);
+  } catch {
+    /* column already exists */
+  }
+  try {
+    await db.execute(`ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   } catch {
     /* column already exists */
   }
@@ -247,8 +254,8 @@ export async function initDatabase(): Promise<void> {
 export async function insertConversation(conv: Conversation): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `INSERT INTO conversations (id, type, title, participants, speakingOrder, lastMessage, lastMessageAt, pinned, createdAt, updatedAt, workspaceDir, groupSystemPrompt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    `INSERT INTO conversations (id, type, title, participants, speakingOrder, lastMessage, lastMessageAt, pinned, archived, createdAt, updatedAt, workspaceDir, groupSystemPrompt)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     [
       conv.id,
       conv.type,
@@ -258,6 +265,7 @@ export async function insertConversation(conv: Conversation): Promise<void> {
       conv.lastMessage,
       conv.lastMessageAt,
       conv.pinned ? 1 : 0,
+      conv.archived ? 1 : 0,
       conv.createdAt,
       conv.updatedAt,
       conv.workspaceDir ?? null,
@@ -303,6 +311,11 @@ export async function updateConversation(
   if (updates.pinned !== undefined) {
     sets.push(`pinned = $${idx}`);
     params.push(updates.pinned ? 1 : 0);
+    idx++;
+  }
+  if (updates.archived !== undefined) {
+    sets.push(`archived = $${idx}`);
+    params.push(updates.archived ? 1 : 0);
     idx++;
   }
   if (updates.speakingOrder !== undefined) {

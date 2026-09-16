@@ -14,10 +14,14 @@ import {
   Users,
   Pencil,
   Pin,
+  Archive,
+  ArchiveRestore,
+  UserRoundCog,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ModelPicker } from "../shared/ModelPicker";
 import { AddMemberPicker, type SelectedMember } from "../shared/AddMemberPicker";
+import { BatchGroupMembersDialog } from "../shared/BatchGroupMembersDialog";
 import { SettingsPage } from "../../pages/settings/SettingsPage";
 import { DiscoverPage } from "../../pages/DiscoverPage";
 import { ModelsPage } from "../../pages/settings/ModelsPage";
@@ -232,22 +236,28 @@ function DesktopConversationList() {
   const clearConversationMessages = useChatStore((s) => s.clearConversationMessages);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const togglePinConversation = useChatStore((s) => s.togglePinConversation);
+  const setConversationArchived = useChatStore((s) => s.setConversationArchived);
   const models = useProviderStore((s) => s.models);
   const providers = useProviderStore((s) => s.providers);
   const getEnabledModels = useProviderStore((s) => s.getEnabledModels);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [showBatchMembers, setShowBatchMembers] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [animateRef] = useAutoAnimate();
 
   const enabledModels = useMemo(() => getEnabledModels(), [models, providers]);
 
   const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
+    const byArchive = conversations.filter((conversation) =>
+      showArchived ? conversation.archived : !conversation.archived,
+    );
+    if (!searchQuery.trim()) return byArchive;
     const q = searchQuery.toLowerCase();
-    return conversations.filter(
+    return byArchive.filter(
       (c) => c.title.toLowerCase().includes(q) || (c.lastMessage ?? "").toLowerCase().includes(q),
     );
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, showArchived]);
 
   const handleNew = useCallback(async () => {
     if (enabledModels.length === 0) {
@@ -275,22 +285,62 @@ function DesktopConversationList() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="border-sidebar-border flex flex-shrink-0 items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sidebar-foreground text-sm font-semibold">{t("tabs.chats")}</h2>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-md"
-              data-new-chat
-              onClick={handleNew}
-            >
-              <Plus size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("chats.startConversation")}</TooltipContent>
-        </Tooltip>
+        <h2 className="text-sidebar-foreground text-sm font-semibold">
+          {showArchived ? t("chats.archived") : t("tabs.chats")}
+        </h2>
+        <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setShowBatchMembers(true)}
+              >
+                <UserRoundCog size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("batchMembers.title")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showArchived ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setShowArchived((value) => !value)}
+              >
+                <Archive size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showArchived ? t("chats.activeConversations") : t("chats.archived")}
+            </TooltipContent>
+          </Tooltip>
+          {!showArchived && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  data-new-chat
+                  onClick={handleNew}
+                >
+                  <Plus size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("chats.startConversation")}</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
+
+      <BatchGroupMembersDialog
+        open={showBatchMembers}
+        onClose={() => setShowBatchMembers(false)}
+        conversations={conversations}
+      />
 
       <ModelPicker
         open={showModelPicker}
@@ -320,7 +370,11 @@ function DesktopConversationList() {
         {filteredConversations.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <p className="text-muted-foreground text-xs">
-              {searchQuery ? t("chats.noResults") : t("chats.noConversations")}
+              {searchQuery
+                ? t("chats.noResults")
+                : showArchived
+                  ? t("chats.noArchived")
+                  : t("chats.noConversations")}
             </p>
           </div>
         ) : (
@@ -334,6 +388,8 @@ function DesktopConversationList() {
               onClear={() => clearConversationMessages(conv.id)}
               onRename={(title) => renameConversation(conv.id, title)}
               onTogglePin={() => togglePinConversation(conv.id)}
+              onArchive={() => setConversationArchived(conv.id, true)}
+              onRestore={() => setConversationArchived(conv.id, false)}
             />
           ))
         )}
@@ -350,6 +406,8 @@ function DesktopConversationItem({
   onClear,
   onRename,
   onTogglePin,
+  onArchive,
+  onRestore,
 }: {
   conversation: Conversation;
   isActive: boolean;
@@ -358,6 +416,8 @@ function DesktopConversationItem({
   onClear: () => void;
   onRename: (title: string) => void;
   onTogglePin: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
 }) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
@@ -431,15 +491,33 @@ function DesktopConversationItem({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36">
+              {!conversation.archived && (
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePin();
+                  }}
+                >
+                  <Pin size={14} className="mr-2" />
+                  {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className="text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTogglePin();
+                  conversation.archived ? onRestore() : onArchive();
                 }}
               >
-                <Pin size={14} className="mr-2" />
-                {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+                {conversation.archived ? (
+                  <ArchiveRestore size={14} className="mr-2" />
+                ) : (
+                  <Archive size={14} className="mr-2" />
+                )}
+                {conversation.archived
+                  ? t("chat.restoreConversation")
+                  : t("chat.archiveConversation")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-xs"
@@ -466,9 +544,22 @@ function DesktopConversationItem({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-40">
-        <ContextMenuItem className="text-xs" onClick={onTogglePin}>
-          <Pin size={14} className="mr-2" />
-          {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+        {!conversation.archived && (
+          <ContextMenuItem className="text-xs" onClick={onTogglePin}>
+            <Pin size={14} className="mr-2" />
+            {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem
+          className="text-xs"
+          onClick={conversation.archived ? onRestore : onArchive}
+        >
+          {conversation.archived ? (
+            <ArchiveRestore size={14} className="mr-2" />
+          ) : (
+            <Archive size={14} className="mr-2" />
+          )}
+          {conversation.archived ? t("chat.restoreConversation") : t("chat.archiveConversation")}
         </ContextMenuItem>
         <ContextMenuItem
           className="text-xs"

@@ -209,6 +209,7 @@ export interface Conversation {
   lastMessage: string | null;
   lastMessageAt: string | null;
   pinned: boolean;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
   /** Per-conversation workspace directory for AI file I/O (desktop only) */

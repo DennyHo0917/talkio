@@ -39,6 +39,10 @@ import {
   reorderParticipants,
   searchAllMessages,
   togglePinConversation,
+  setConversationArchived,
+  updateMembersAcrossGroups,
+  type BatchMemberChangeResult,
+  type BatchMemberOperation,
   updateGroupSystemPrompt,
   updateParticipantIdentity,
   updateParticipantNickname,
@@ -49,6 +53,7 @@ import {
 } from "./chat-store-actions";
 import { createAssistantMessage, createUserMessage } from "./chat-message-builder";
 import { generateId } from "../lib/id";
+import i18n from "../i18n";
 import { generateImages } from "../services/image-generation";
 import { persistGeneratedImages } from "../services/image-store";
 import { notifyDbChange } from "../hooks/useDatabase";
@@ -131,6 +136,12 @@ export interface ChatState {
   removeParticipant: (conversationId: string, participantId: string) => Promise<void>;
   renameConversation: (conversationId: string, title: string) => Promise<void>;
   togglePinConversation: (conversationId: string) => Promise<void>;
+  setConversationArchived: (conversationId: string, archived: boolean) => Promise<void>;
+  updateMembersAcrossGroups: (
+    conversationIds: string[],
+    operation: BatchMemberOperation,
+    members: { modelId: string; identityId: string | null }[],
+  ) => Promise<BatchMemberChangeResult[]>;
   updateSpeakingOrder: (conversationId: string, order: SpeakingOrder) => Promise<void>;
   updateGroupSystemPrompt: (conversationId: string, prompt: string) => Promise<void>;
   reorderParticipants: (conversationId: string, participantIds: string[]) => Promise<void>;
@@ -456,6 +467,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   togglePinConversation: async (conversationId: string) => {
     await togglePinConversation(conversationId);
+  },
+
+  setConversationArchived: async (conversationId: string, archived: boolean) => {
+    await setConversationArchived(conversationId, archived);
+    if (archived && get().currentConversationId === conversationId) {
+      set({ currentConversationId: null, activeBranchId: null, canSkipCurrent: false });
+    }
+  },
+
+  updateMembersAcrossGroups: async (conversationIds, operation, members) => {
+    const blockedIds = new Set(
+      conversationIds.filter(
+        (id) => _abortControllers.has(id) || _participantAbortControllers.has(id),
+      ),
+    );
+    const results = await updateMembersAcrossGroups(
+      conversationIds.filter((id) => !blockedIds.has(id)),
+      operation,
+      members,
+    );
+    for (const conversationId of blockedIds) {
+      const conversation = await getConversation(conversationId);
+      results.push({
+        conversationId,
+        title: conversation?.title ?? conversationId,
+        status: "failed",
+        changedCount: 0,
+        error: i18n.t("batchMembers.generationInProgress"),
+      });
+    }
+    return conversationIds
+      .map((id) => results.find((result) => result.conversationId === id))
+      .filter((result): result is BatchMemberChangeResult => result !== undefined);
   },
 
   updateSpeakingOrder: async (conversationId: string, order) => {
