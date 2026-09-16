@@ -22,6 +22,7 @@ test("full backup restores more than 200 messages and message blocks", async ({ 
 
   const result = await page.evaluate(async () => {
     const database = await import("/src/storage/database.ts");
+    await database.initDatabase();
     const backupService = await import("/src/services/backup.ts");
     const conversation = {
       id: "backup-conversation",
@@ -77,7 +78,12 @@ test("full backup restores more than 200 messages and message blocks", async ({ 
     );
 
     const backup = await backupService.createBackup();
-    await database.replaceChatData({ conversations: [], messages: [], messageBlocks: [] });
+    await database.replaceChatData({
+      conversations: [],
+      messages: [],
+      messageBlocks: [],
+      tasks: [],
+    });
     const importResult = await backupService.importBackupFromString(JSON.stringify(backup));
 
     return {
