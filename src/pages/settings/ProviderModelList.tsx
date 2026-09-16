@@ -205,14 +205,14 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between px-1">
-        <span className="text-muted-foreground text-[13px] font-normal tracking-tight uppercase">
+        <span className="font-normal text-[13px] text-muted-foreground uppercase tracking-tight">
           {t("providerEdit.models")} ({filteredModels.length})
         </span>
         <div className="flex items-center gap-3">
           {displayModels.length > 0 && (
             <button
               onClick={() => setProviderModelsEnabled(providerId, !allEnabled)}
-              className="text-[13px] font-medium active:opacity-60"
+              className="font-medium text-[13px] active:opacity-60"
               style={{ color: "var(--primary)" }}
             >
               {allEnabled ? t("providerEdit.deselectAll") : t("providerEdit.selectAll")}
@@ -222,7 +222,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
             <button
               onClick={handleBatchHealthCheck}
               disabled={healthChecking}
-              className="flex items-center gap-1 text-[13px] font-medium active:opacity-60 disabled:opacity-40"
+              className="flex items-center gap-1 font-medium text-[13px] active:opacity-60 disabled:opacity-40"
               style={{ color: "var(--primary)" }}
             >
               {healthChecking ? (
@@ -236,7 +236,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
           <button
             onClick={onRefresh}
             disabled={pulling}
-            className="flex items-center gap-1 text-[13px] font-medium active:opacity-60"
+            className="flex items-center gap-1 font-medium text-[13px] active:opacity-60"
             style={{ color: "var(--primary)" }}
           >
             <IoRefreshOutline size={14} color="var(--primary)" />
@@ -251,7 +251,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
       >
         <IoSearchOutline size={16} color="var(--muted-foreground)" className="mr-2" />
         <input
-          className="text-foreground flex-1 bg-transparent text-[14px] outline-none"
+          className="flex-1 bg-transparent text-[14px] text-foreground outline-none"
           value={modelSearch}
           onChange={(e) => setModelSearch(e.target.value)}
           placeholder={t("providerEdit.searchModels")}
@@ -265,7 +265,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
 
       <div className="mt-2 flex items-center gap-2">
         <input
-          className="text-foreground flex-1 rounded-xl px-3 py-2.5 text-[14px] outline-none"
+          className="flex-1 rounded-xl px-3 py-2.5 text-[14px] text-foreground outline-none"
           style={{ backgroundColor: "var(--card)" }}
           value={newModelId}
           onChange={(e) => setNewModelId(e.target.value)}
@@ -278,7 +278,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
             setNewModelId("");
           }}
           disabled={!trimmedModelId}
-          className="rounded-xl px-4 py-2.5 text-[14px] font-medium active:opacity-80"
+          className="rounded-xl px-4 py-2.5 font-medium text-[14px] active:opacity-80"
           style={{
             backgroundColor: trimmedModelId ? "var(--primary)" : "var(--muted)",
             color: trimmedModelId ? "white" : "var(--muted-foreground)",
@@ -302,7 +302,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                 <div className="mr-3 min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <p
-                      className={`truncate text-[15px] font-semibold ${m.enabled ? "text-foreground" : "text-muted-foreground/40"}`}
+                      className={`truncate font-semibold text-[15px] ${m.enabled ? "text-foreground" : "text-muted-foreground/40"}`}
                     >
                       {m.displayName}
                     </p>
@@ -328,11 +328,11 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                         />
                       ))}
                   </div>
-                  <p className="text-muted-foreground truncate text-[12px]">{m.modelId}</p>
+                  <p className="truncate text-[12px] text-muted-foreground">{m.modelId}</p>
                   {healthResults.has(m.id) &&
                     !healthResults.get(m.id)!.ok &&
                     healthResults.get(m.id)!.error && (
-                      <p className="text-destructive mt-0.5 truncate text-[11px]">
+                      <p className="mt-0.5 truncate text-[11px] text-destructive">
                         {healthResults.get(m.id)!.error}
                       </p>
                     )}
@@ -363,7 +363,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                       onChange={() => toggleModel(m.id)}
                       className="peer sr-only"
                     />
-                    <div className="peer-checked:bg-primary bg-muted-foreground/30 h-6 w-11 rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full" />
+                    <div className="h-6 w-11 rounded-full bg-muted-foreground/30 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full" />
                   </label>
                   <button
                     onClick={() => deleteModel(m.id)}
@@ -429,7 +429,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                       }
                     }}
                     disabled={probingModelIds.has(m.id)}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60 disabled:opacity-40"
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60 disabled:opacity-40"
                     style={{ backgroundColor: "var(--muted)", color: "var(--primary)" }}
                   >
                     {probingModelIds.has(m.id) ? (
@@ -441,7 +441,7 @@ export function ProviderModelList({ providerId, pulling, onRefresh }: ProviderMo
                   </button>
                 )}
               </div>
-              <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 {m.outputModalities.includes("text") && (
                   <span>
                     {t("providerEdit.contextWindow", {

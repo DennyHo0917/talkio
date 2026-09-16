@@ -33,7 +33,7 @@ export const CodeBlock = memo(function CodeBlock({
     if (isStreaming) {
       return (
         <div
-          className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+          className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
           style={{ border: "0.5px solid var(--border)" }}
         >
           <div
@@ -44,7 +44,7 @@ export const CodeBlock = memo(function CodeBlock({
             }}
           >
             <span
-              className="font-mono text-[10px] font-bold uppercase"
+              className="font-bold font-mono text-[10px] uppercase"
               style={{ color: "var(--primary)" }}
             >
               mermaid · rendering after completion
@@ -61,7 +61,7 @@ export const CodeBlock = memo(function CodeBlock({
     }
     return (
       <div
-        className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+        className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
         style={{ border: "0.5px solid var(--border)", backgroundColor: "var(--card)" }}
       >
         <MermaidRenderer chart={codeString} />
@@ -75,7 +75,7 @@ export const CodeBlock = memo(function CodeBlock({
       const lineCount = codeString.split("\n").length;
       return (
         <div
-          className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+          className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
           style={{ border: "0.5px solid var(--border)", backgroundColor: "var(--card)" }}
         >
           <div className="flex items-center gap-3 px-4 py-4">
@@ -86,7 +86,7 @@ export const CodeBlock = memo(function CodeBlock({
               style={{ animationDuration: "1.5s" }}
             />
             <div className="min-w-0 flex-1">
-              <span className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+              <span className="font-medium text-sm" style={{ color: "var(--muted-foreground)" }}>
                 {lang.toUpperCase()} ...
               </span>
               <p
@@ -101,7 +101,7 @@ export const CodeBlock = memo(function CodeBlock({
       );
     }
     return (
-      <div className="mt-1 w-full max-w-full min-w-0">
+      <div className="mt-1 w-full min-w-0 max-w-full">
         <HtmlPreview code={codeString} language={lang} />
       </div>
     );
@@ -114,7 +114,7 @@ export const CodeBlock = memo(function CodeBlock({
       const lineCount = codeString.split("\n").length;
       return (
         <div
-          className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+          className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
           style={{ border: "0.5px solid var(--border)" }}
         >
           <div
@@ -127,7 +127,7 @@ export const CodeBlock = memo(function CodeBlock({
                 style={{ backgroundColor: "var(--primary)" }}
               />
               <span
-                className="font-mono text-[11px] font-semibold"
+                className="font-mono font-semibold text-[11px]"
                 style={{ color: "var(--primary)" }}
               >
                 {lang.toUpperCase()}
@@ -184,7 +184,7 @@ function HighlightedCodeBlock({
 
   return (
     <div
-      className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+      className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
       style={{ border: "0.5px solid var(--border)" }}
     >
       <div
@@ -192,7 +192,7 @@ function HighlightedCodeBlock({
         style={{ backgroundColor: "var(--background)", borderBottom: "0.5px solid var(--border)" }}
       >
         <span
-          className="font-mono text-[10px] font-bold uppercase"
+          className="font-bold font-mono text-[10px] uppercase"
           style={{ color: "var(--muted-foreground)" }}
         >
           {lang}
@@ -213,6 +213,7 @@ function HighlightedCodeBlock({
         {html ? (
           <div
             className="shiki-code text-[13px] leading-relaxed [&_code]:bg-transparent [&_pre]:m-0 [&_pre]:bg-transparent [&_pre]:px-3 [&_pre]:py-2"
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: Shiki generates escaped syntax-highlighted HTML.
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (

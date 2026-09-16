@@ -15,8 +15,8 @@ export function EmptyState({ icon, title, subtitle }: EmptyStateProps) {
       >
         {icon}
       </div>
-      <p className="text-foreground mt-4 text-[16px] font-semibold">{title}</p>
-      <p className="text-muted-foreground mt-1 text-center text-[13px] leading-relaxed">
+      <p className="mt-4 font-semibold text-[16px] text-foreground">{title}</p>
+      <p className="mt-1 text-center text-[13px] text-muted-foreground leading-relaxed">
         {subtitle}
       </p>
     </div>

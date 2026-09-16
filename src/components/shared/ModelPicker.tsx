@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useProviderStore } from "../../stores/provider-store";
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { groupModelsByProvider } from "../../lib/model-utils";
-import type { Model } from "../../types";
 import { isStandaloneImageModel } from "../../services/image-model";
 
 interface ModelPickerProps {
@@ -91,19 +90,19 @@ export function ModelPicker({
             className="flex items-center rounded-xl px-3 py-2"
             style={{ backgroundColor: "var(--secondary)" }}
           >
-            <Search size={16} className="text-muted-foreground flex-shrink-0" />
+            <Search size={16} className="flex-shrink-0 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("providerEdit.searchModels")}
-              className="text-foreground placeholder:text-muted-foreground/50 ml-2 flex-1 bg-transparent text-[15px] outline-none"
+              className="ml-2 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/50"
             />
           </div>
         </div>
 
         <div className="-mx-6 mt-2 flex-1 overflow-y-auto">
           {sections.length === 0 ? (
-            <p className="text-muted-foreground py-6 text-center text-xs">
+            <p className="py-6 text-center text-muted-foreground text-xs">
               {models.length === 0 ? t("models.noModels") : t("chats.noResults")}
             </p>
           ) : (
@@ -113,7 +112,7 @@ export function ModelPicker({
                   className="sticky top-0 z-10 px-5 py-1.5"
                   style={{ backgroundColor: "var(--secondary)" }}
                 >
-                  <p className="text-muted-foreground text-[13px] font-semibold">{section.title}</p>
+                  <p className="font-semibold text-[13px] text-muted-foreground">{section.title}</p>
                 </div>
                 {section.data.map((model, idx) => {
                   const { color: mColor, initials: mInitials } = getAvatarProps(model.displayName);
@@ -142,16 +141,16 @@ export function ModelPicker({
                       }}
                     >
                       <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-semibold text-sm text-white"
                         style={{ backgroundColor: mColor }}
                       >
                         {mInitials}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-foreground truncate text-[16px] font-medium">
+                        <p className="truncate font-medium text-[16px] text-foreground">
                           {model.displayName}
                         </p>
-                        <p className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
+                        <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                           <span className="truncate">{model.modelId}</span>
                           {imageOnly && (
                             <ImageIcon
@@ -164,12 +163,12 @@ export function ModelPicker({
                       </div>
                       {multiSelect ? (
                         isSelected ? (
-                          <CheckCircle size={22} className="text-primary flex-shrink-0" />
+                          <CheckCircle size={22} className="flex-shrink-0 text-primary" />
                         ) : (
-                          <Circle size={22} className="text-muted-foreground flex-shrink-0" />
+                          <Circle size={22} className="flex-shrink-0 text-muted-foreground" />
                         )
                       ) : (
-                        isSelected && <Check size={18} className="text-primary flex-shrink-0" />
+                        isSelected && <Check size={18} className="flex-shrink-0 text-primary" />
                       )}
                     </button>
                   );
@@ -180,11 +179,11 @@ export function ModelPicker({
         </div>
 
         {multiSelect && (
-          <div className="border-border -mx-6 border-t px-6 pt-3">
+          <div className="-mx-6 border-border border-t px-6 pt-3">
             <button
               onClick={handleConfirm}
               disabled={selectedIds.size === 0}
-              className="w-full rounded-xl py-2.5 text-[15px] font-semibold transition-opacity disabled:opacity-40"
+              className="w-full rounded-xl py-2.5 font-semibold text-[15px] transition-opacity disabled:opacity-40"
               style={{ backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }}
             >
               {t("common.confirm")}

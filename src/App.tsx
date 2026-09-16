@@ -175,7 +175,7 @@ export default function App() {
   return (
     <ConfirmDialogProvider>
       <TooltipProvider>
-        <div className="bg-background text-foreground flex h-screen w-screen flex-col overflow-hidden antialiased">
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground antialiased">
           <div className="relative min-h-0 flex-1">
             <Suspense fallback={loading}>
               {ready ? isMobile ? <MobileLayout /> : <DesktopLayout /> : loading}

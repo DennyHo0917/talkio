@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronUp,
   User,
-  Users,
   Pencil,
   ArrowDown,
   ArrowUpDown,
@@ -67,7 +66,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import type { ConversationParticipant, Identity, ReasoningEffort } from "../../types";
+import type { ConversationParticipant, Identity } from "../../types";
 import {
   getSupportedReasoningEfforts,
   nextReasoningEffort,
@@ -93,7 +92,6 @@ function SortableParticipantRow({
   participant: p,
   index: idx,
   allParticipants,
-  getModelById,
   getIdentityById,
   onEditRole,
   onEditNickname,
@@ -106,7 +104,6 @@ function SortableParticipantRow({
   participant: ConversationParticipant;
   index: number;
   allParticipants: ConversationParticipant[];
-  getModelById: (id: string) => any;
   getIdentityById: (id: string) => any;
   onEditRole: () => void;
   onEditNickname: () => void;
@@ -138,21 +135,21 @@ function SortableParticipantRow({
           <GripVertical size={14} className="text-muted-foreground" />
         </button>
       )}
-      <span className="text-muted-foreground w-4 flex-shrink-0 text-center text-[11px]">
+      <span className="w-4 flex-shrink-0 text-center text-[11px] text-muted-foreground">
         {idx + 1}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-foreground truncate text-[13px] font-medium">
+        <p className="truncate font-medium text-[13px] text-foreground">
           {parts.nickname ?? parts.modelName}
           {parts.suffix && <span className="text-muted-foreground"> {parts.suffix}</span>}
         </p>
-        <p className="text-muted-foreground truncate text-[11px]">
+        <p className="truncate text-[11px] text-muted-foreground">
           {[parts.nickname ? parts.modelName : null, parts.identityName, parts.providerName]
             .filter(Boolean)
             .join(" · ")}
         </p>
         {stats && stats.messageCount > 0 && (
-          <p className="text-muted-foreground/60 flex items-center gap-1 text-[10px]">
+          <p className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
             <Activity size={9} />
             {formatTokenCount(stats.inputTokens)} in · {formatTokenCount(stats.outputTokens)} out
             {stats.toolCalls > 0 && ` · ${stats.toolCalls} tools`}
@@ -400,15 +397,13 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
       });
       setManualSummary(conversationId, `[Previous conversation summary]\n${result.summary}`);
       const pct = Math.round((1 - result.compressedTokens / result.originalTokens) * 100);
-      await (
-        await import("../../components/shared/ConfirmDialogProvider")
-      ).appAlert(
+      await (await import("../../components/shared/ConfirmDialogProvider")).appAlert(
         `${t("chat.compressSuccess")}\n${result.originalTokens} → ${result.compressedTokens} tokens (${pct}% ${t("chat.reduction")})`,
       );
     } catch (err) {
-      await (
-        await import("../../components/shared/ConfirmDialogProvider")
-      ).appAlert(`${t("chat.compressFailed")}: ${err instanceof Error ? err.message : "Unknown"}`);
+      await (await import("../../components/shared/ConfirmDialogProvider")).appAlert(
+        `${t("chat.compressFailed")}: ${err instanceof Error ? err.message : "Unknown"}`,
+      );
     } finally {
       setIsCompressing(false);
     }
@@ -422,9 +417,9 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
       await updateConversation(conversationId, { workspaceDir: dir });
       notifyDbChange("conversations");
     } catch (err) {
-      await (
-        await import("../../components/shared/ConfirmDialogProvider")
-      ).appAlert(`${t("common.error")}: ${err instanceof Error ? err.message : "Unknown"}`);
+      await (await import("../../components/shared/ConfirmDialogProvider")).appAlert(
+        `${t("common.error")}: ${err instanceof Error ? err.message : "Unknown"}`,
+      );
     }
   }, [conversationId, t]);
 
@@ -456,7 +451,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-border bg-background flex flex-shrink-0 items-center gap-2 border-b px-4 py-2.5">
+      <div className="flex flex-shrink-0 items-center gap-2 border-border border-b bg-background px-4 py-2.5">
         <div className="flex min-w-0 flex-1 items-center">
           {isEditingTitle ? (
             <form
@@ -478,7 +473,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setIsEditingTitle(false);
                 }}
-                className="text-foreground border-primary w-48 border-b bg-transparent text-sm font-semibold outline-none"
+                className="w-48 border-primary border-b bg-transparent font-semibold text-foreground text-sm outline-none"
               />
             </form>
           ) : (
@@ -506,24 +501,24 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                   }
                 }}
               >
-                <span className="text-foreground truncate text-sm font-semibold">{title}</span>
-                <span className="text-muted-foreground truncate text-xs">·</span>
+                <span className="truncate font-semibold text-foreground text-sm">{title}</span>
+                <span className="truncate text-muted-foreground text-xs">·</span>
                 {isGroup ? (
                   conv?.speakingOrder === "parallel" ? (
-                    <Layers size={12} className="text-primary flex-shrink-0" />
+                    <Layers size={12} className="flex-shrink-0 text-primary" />
                   ) : conv?.speakingOrder === "random" ? (
-                    <Shuffle size={12} className="text-primary flex-shrink-0" />
+                    <Shuffle size={12} className="flex-shrink-0 text-primary" />
                   ) : (
-                    <ArrowUpDown size={12} className="text-primary flex-shrink-0" />
+                    <ArrowUpDown size={12} className="flex-shrink-0 text-primary" />
                   )
                 ) : (
-                  <User size={12} className="text-primary flex-shrink-0" />
+                  <User size={12} className="flex-shrink-0 text-primary" />
                 )}
-                <span className="text-primary truncate text-xs">{subtitle}</span>
+                <span className="truncate text-primary text-xs">{subtitle}</span>
                 {showIdentityPanel || showParticipants ? (
-                  <ChevronUp size={12} className="text-muted-foreground flex-shrink-0" />
+                  <ChevronUp size={12} className="flex-shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronDown size={12} className="text-muted-foreground flex-shrink-0" />
+                  <ChevronDown size={12} className="flex-shrink-0 text-muted-foreground" />
                 )}
               </button>
             </>
@@ -537,10 +532,10 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
           >
             <Minimize2
               size={12}
-              className="text-primary animate-spin"
+              className="animate-spin text-primary"
               style={{ animationDuration: "2s" }}
             />
-            <span className="text-primary text-[11px] font-medium">{t("chat.compressing")}</span>
+            <span className="font-medium text-[11px] text-primary">{t("chat.compressing")}</span>
           </div>
         )}
         {hasManualSummary && !isCompressing && (
@@ -549,7 +544,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
             style={{ backgroundColor: "color-mix(in srgb, var(--primary) 8%, transparent)" }}
           >
             <Minimize2 size={11} className="text-primary" />
-            <span className="text-primary text-[10px] font-medium">{t("chat.compressed")}</span>
+            <span className="font-medium text-[10px] text-primary">{t("chat.compressed")}</span>
           </div>
         )}
 
@@ -572,7 +567,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                   }
                 />
                 <span
-                  className={`text-[10px] font-medium ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
+                  className={`font-medium text-[10px] ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
                 >
                   {currentParticipant.reasoningEffort
                     ? reasoningEffortLabel(currentParticipant.reasoningEffort)
@@ -590,7 +585,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                 >
                   <span className="flex-1">{reasoningEffortLabel(level)}</span>
                   {currentParticipant.reasoningEffort === level && (
-                    <span className="text-primary text-xs font-semibold">✓</span>
+                    <span className="font-semibold text-primary text-xs">✓</span>
                   )}
                 </DropdownMenuItem>
               ))}
@@ -617,8 +612,8 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
             }}
           >
             <span className="flex items-center gap-1.5">
-              <FolderOpen size={12} className="text-primary flex-shrink-0" />
-              <span className="text-primary truncate text-[11px] font-medium">
+              <FolderOpen size={12} className="flex-shrink-0 text-primary" />
+              <span className="truncate font-medium text-[11px] text-primary">
                 {getWorkspaceName(conv.workspaceDir)}
               </span>
             </span>
@@ -727,15 +722,15 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
 
       {/* Group participants panel */}
       {isGroup && showParticipants && conv && (
-        <div className="border-border bg-card flex-shrink-0 border-b px-4 py-2">
+        <div className="flex-shrink-0 border-border border-b bg-card px-4 py-2">
           {/* Speaking order toggle */}
-          <div className="border-border mb-2 flex items-center gap-2 border-b pb-2">
-            <span className="text-muted-foreground text-[11px] font-medium">
+          <div className="mb-2 flex items-center gap-2 border-border border-b pb-2">
+            <span className="font-medium text-[11px] text-muted-foreground">
               {t("chat.speakingOrder")}
             </span>
             <div className="flex-1" />
             <button
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] transition-colors ${
                 (conv.speakingOrder ?? "sequential") === "sequential"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted/50"
@@ -747,7 +742,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
               <ArrowUpDown size={11} /> {t("chat.sequential")}
             </button>
             <button
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] transition-colors ${
                 conv.speakingOrder === "random"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted/50"
@@ -757,7 +752,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
               <Shuffle size={11} /> {t("chat.random")}
             </button>
             <button
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] transition-colors ${
                 conv.speakingOrder === "parallel"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted/50"
@@ -770,9 +765,9 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
             </button>
           </div>
           {/* Group system prompt */}
-          <div className="border-border mb-2 border-b pb-2">
+          <div className="mb-2 border-border border-b pb-2">
             <MentionTextarea
-              className="text-foreground placeholder:text-muted-foreground w-full resize-none rounded-lg border-0 bg-transparent px-0 py-1 text-xs leading-relaxed outline-none"
+              className="w-full resize-none rounded-lg border-0 bg-transparent px-0 py-1 text-foreground text-xs leading-relaxed outline-none placeholder:text-muted-foreground"
               rows={2}
               placeholder={t("chat.groupPromptPlaceholder")}
               mentions={participantMentions}
@@ -805,7 +800,6 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                   participant={p}
                   index={idx}
                   allParticipants={conv.participants}
-                  getModelById={getModelById}
                   getIdentityById={getIdentityById}
                   onEditRole={() => {
                     setEditingParticipantId(p.id);
@@ -834,7 +828,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
             </SortableContext>
           </DndContext>
           <button
-            className="border-border text-primary mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-xs hover:opacity-70"
+            className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border border-dashed py-2 text-primary text-xs hover:opacity-70"
             onClick={() => setShowAddMemberPicker(true)}
           >
             <Plus size={14} /> {t("chat.addMember")}
@@ -845,11 +839,11 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
       {/* Identity panel (single chat or editing group participant) */}
       {showIdentityPanel && (
         <div
-          className="border-border bg-card flex-shrink-0 border-b"
+          className="flex-shrink-0 border-border border-b bg-card"
           style={{ maxHeight: 240, overflowY: "auto" }}
         >
           <button
-            className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-2.5 text-left"
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50"
             onClick={() => {
               updateParticipantIdentity(
                 conversationId,
@@ -865,20 +859,20 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
               setEditingParticipantId(null);
             }}
           >
-            <div className="bg-muted flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-muted">
               <User size={14} className="text-muted-foreground" />
             </div>
-            <span className="text-foreground flex-1 text-[13px]">{t("chat.noIdentity")}</span>
+            <span className="flex-1 text-[13px] text-foreground">{t("chat.noIdentity")}</span>
             {!(editingParticipantId
               ? conv?.participants.find((p) => p.id === editingParticipantId)?.identityId
               : currentParticipant?.identityId) && (
-              <span className="text-primary text-xs font-semibold">✓</span>
+              <span className="font-semibold text-primary text-xs">✓</span>
             )}
           </button>
           {identities.map((identity: Identity) => (
             <button
               key={identity.id}
-              className="hover:bg-muted/50 border-border/50 flex w-full items-center gap-3 border-t px-4 py-2.5 text-left"
+              className="flex w-full items-center gap-3 border-border/50 border-t px-4 py-2.5 text-left hover:bg-muted/50"
               onClick={() => {
                 updateParticipantIdentity(
                   conversationId,
@@ -894,15 +888,15 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
                 setEditingParticipantId(null);
               }}
             >
-              <div className="bg-primary/10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full">
-                <span className="text-primary text-[11px] font-bold">
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <span className="font-bold text-[11px] text-primary">
                   {identity.name.slice(0, 1)}
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-foreground truncate text-[13px] font-medium">{identity.name}</p>
+                <p className="truncate font-medium text-[13px] text-foreground">{identity.name}</p>
                 {identity.systemPrompt && (
-                  <p className="text-muted-foreground truncate text-[11px]">
+                  <p className="truncate text-[11px] text-muted-foreground">
                     {identity.systemPrompt.slice(0, 60)}
                   </p>
                 )}
@@ -910,7 +904,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
               {(editingParticipantId
                 ? conv?.participants.find((p) => p.id === editingParticipantId)?.identityId
                 : currentParticipant?.identityId) === identity.id && (
-                <span className="text-primary text-xs font-semibold">✓</span>
+                <span className="font-semibold text-primary text-xs">✓</span>
               )}
             </button>
           ))}
@@ -980,7 +974,7 @@ export function DesktopChatPanel({ conversationId }: { conversationId: string })
             }}
           >
             <AlertTriangle size={13} color="var(--destructive)" />
-            <span className="text-[12px] font-medium" style={{ color: "var(--destructive)" }}>
+            <span className="font-medium text-[12px]" style={{ color: "var(--destructive)" }}>
               {t("chat.errorCount", { count: errorMessageIds.length })}
             </span>
             <div className="flex items-center gap-0.5">

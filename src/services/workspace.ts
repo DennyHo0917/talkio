@@ -1,5 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, type DirEntry } from "@tauri-apps/plugin-fs";
 import ignore from "ignore";
 import { diff_match_patch } from "diff-match-patch";
 import { normalizeRelativePath } from "../lib/path-utils";
@@ -140,7 +140,7 @@ export async function readWorkspaceTree(
       return;
     }
 
-    let entries;
+    let entries: DirEntry[];
     try {
       entries = await readDir(dir);
     } catch {
@@ -432,7 +432,7 @@ export async function searchWorkspaceFiles(
 
   async function walk(dir: string, depth: number) {
     if (results.length >= maxResults || depth > maxDepth) return;
-    let entries;
+    let entries: DirEntry[];
     try {
       entries = await readDir(dir);
     } catch {

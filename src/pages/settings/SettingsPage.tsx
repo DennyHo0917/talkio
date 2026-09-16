@@ -83,9 +83,9 @@ export function SettingsRow({
       >
         <Icon size={18} color={iconColor} />
       </div>
-      <span className="text-foreground flex-1 text-left text-[16px] font-medium">{label}</span>
+      <span className="flex-1 text-left font-medium text-[16px] text-foreground">{label}</span>
       <div className="flex flex-shrink-0 items-center">
-        {detail && <span className="text-muted-foreground mr-2 text-sm">{detail}</span>}
+        {detail && <span className="mr-2 text-muted-foreground text-sm">{detail}</span>}
         <IoChevronForward size={18} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
       </div>
     </button>
@@ -95,7 +95,7 @@ export function SettingsRow({
 export function SectionHeader({ label }: { label: string }) {
   return (
     <div className="px-5 py-1.5" style={{ backgroundColor: "var(--secondary)" }}>
-      <p className="text-muted-foreground text-[13px] font-semibold">{label}</p>
+      <p className="font-semibold text-[13px] text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -159,7 +159,7 @@ export function SettingsPage({
 
   // Listen for browser back (Android back button triggers this)
   useEffect(() => {
-    const handler = (e: PopStateEvent) => {
+    const handler = (_e: PopStateEvent) => {
       if (stackRef.current.length > 0) {
         popInternal();
       }
@@ -190,7 +190,7 @@ export function SettingsPage({
     });
   }, [initialProviderEditId, onInitialProviderEditClose, providers, push, pop]);
 
-  const top = subPageStack.length > 0 ? subPageStack[subPageStack.length - 1] : null;
+  const _top = subPageStack.length > 0 ? subPageStack[subPageStack.length - 1] : null;
 
   const themeLabel =
     settings.theme === "dark"
@@ -219,7 +219,7 @@ export function SettingsPage({
       >
         {/* iOS Large Title */}
         <div className="px-4 pt-2 pb-2">
-          <h1 className="text-foreground text-[20px] font-bold tracking-tight">
+          <h1 className="font-bold text-[20px] text-foreground tracking-tight">
             {t("settings.title")}
           </h1>
         </div>
@@ -340,7 +340,7 @@ export function SettingsPage({
               <Minimize2 size={18} color="#10b981" />
             </div>
             <div className="min-w-0 flex-1">
-              <span className="text-foreground text-[16px] font-medium">
+              <span className="font-medium text-[16px] text-foreground">
                 {t("settings.contextCompression")}
               </span>
             </div>
@@ -350,7 +350,7 @@ export function SettingsPage({
                 onChange={(e) =>
                   updateSettings({ contextCompressionThreshold: Number(e.target.value) })
                 }
-                className="text-muted-foreground flex-shrink-0 cursor-pointer appearance-none rounded-lg px-2 py-1 text-[13px] outline-none"
+                className="flex-shrink-0 cursor-pointer appearance-none rounded-lg px-2 py-1 text-[13px] text-muted-foreground outline-none"
                 style={{ backgroundColor: "var(--secondary)" }}
               >
                 <option value={8000}>8K</option>
@@ -394,7 +394,7 @@ export function SettingsPage({
                 <ArrowUp size={18} color="#6366f1" />
               </div>
               <div className="min-w-0 flex-1">
-                <span className="text-foreground text-[16px] font-medium">
+                <span className="font-medium text-[16px] text-foreground">
                   {t("settings.enterToSend")}
                 </span>
               </div>
@@ -429,10 +429,10 @@ export function SettingsPage({
                 <PanelBottomClose size={18} color="#14b8a6" />
               </div>
               <div className="min-w-0 flex-1">
-                <span className="text-foreground text-[16px] font-medium">
+                <span className="font-medium text-[16px] text-foreground">
                   {t("settings.closeToTray")}
                 </span>
-                <p className="text-muted-foreground mt-0.5 text-[13px]">
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
                   {t("settings.closeToTrayHint")}
                 </p>
               </div>
@@ -466,10 +466,10 @@ export function SettingsPage({
               <ShieldCheck size={18} color="#ec4899" />
             </div>
             <div className="min-w-0 flex-1">
-              <span className="text-foreground text-[16px] font-medium">
+              <span className="font-medium text-[16px] text-foreground">
                 {t("settings.toolApproval")}
               </span>
-              <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed">
+              <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
                 {settings.toolApprovalMode === "ask"
                   ? t("settings.toolApprovalAskHint")
                   : t("settings.toolApprovalAutoHint")}
@@ -611,15 +611,15 @@ export function SettingsPage({
               border: "1px solid color-mix(in srgb, var(--primary) 10%, transparent)",
             }}
           >
-            <p className="text-muted-foreground text-center text-xs leading-relaxed">
+            <p className="text-center text-muted-foreground text-xs leading-relaxed">
               🛡️ {t("settings.securityTip")}
             </p>
           </div>
           <div className="pb-6 text-center">
-            <p className="text-muted-foreground text-[10px] font-medium tracking-widest uppercase">
+            <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
               Talkio
             </p>
-            <p className="text-muted-foreground mt-1 text-xs">v{__APP_VERSION__}</p>
+            <p className="mt-1 text-muted-foreground text-xs">v{__APP_VERSION__}</p>
           </div>
         </div>
       </div>
@@ -646,7 +646,7 @@ export function SettingsPage({
               >
                 <IoChevronBack size={24} color="var(--primary)" />
               </button>
-              <span className="text-foreground flex-1 text-center text-[17px] font-semibold">
+              <span className="flex-1 text-center font-semibold text-[17px] text-foreground">
                 {page.title}
               </span>
               <div className="flex min-w-12 items-center justify-end pr-1">
@@ -809,7 +809,7 @@ export function ProvidersListPage({
                   >
                     <div className="relative flex-shrink-0">
                       <div
-                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
+                        className="flex h-10 w-10 items-center justify-center rounded-full font-semibold text-sm text-white"
                         style={{ backgroundColor: getAvatarProps(provider.name).color }}
                       >
                         {getAvatarProps(provider.name).initials}
@@ -828,11 +828,11 @@ export function ProvidersListPage({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-foreground truncate text-[16px] font-medium">
+                        <p className="truncate font-medium text-[16px] text-foreground">
                           {provider.name}
                         </p>
                       </div>
-                      <p className="text-muted-foreground truncate text-[13px]">
+                      <p className="truncate text-[13px] text-muted-foreground">
                         {t("providers.modelsCount", {
                           total: providerModels.length,
                           active: activeModels.length,

@@ -71,7 +71,7 @@ export function ParticipantNicknameDialog({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !saving) void handleSave();
           }}
-          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary h-10 w-full rounded-md border px-3 text-sm outline-none"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-foreground text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
         />
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
         <DialogFooter>

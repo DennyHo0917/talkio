@@ -232,7 +232,8 @@ describe("generate_image tool", () => {
     const generateImage = getBuiltInToolDefs().find(
       (definition) => definition.function.name === "generate_image",
     );
-    const modelProperty = (generateImage?.function.parameters.properties as Record<string, any>)
+    expect(generateImage).toBeDefined();
+    const modelProperty = (generateImage!.function.parameters.properties as Record<string, any>)
       .model;
 
     expect(modelProperty.enum).toEqual(["Gateway/gpt-image-1"]);

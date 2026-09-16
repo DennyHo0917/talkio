@@ -132,24 +132,24 @@ export function AddMemberContent({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1">
         {/* Left: Model list */}
-        <div className="border-border flex min-h-0 w-1/2 flex-col border-r">
+        <div className="flex min-h-0 w-1/2 flex-col border-border border-r">
           <div className="flex-shrink-0 px-2 py-2">
             <div
               className="flex items-center rounded-lg px-2 py-1.5"
               style={{ backgroundColor: "var(--secondary)" }}
             >
-              <Search size={14} className="text-muted-foreground flex-shrink-0" />
+              <Search size={14} className="flex-shrink-0 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("providerEdit.searchModels")}
-                className="text-foreground placeholder:text-muted-foreground/50 ml-1.5 flex-1 bg-transparent text-[13px] outline-none"
+                className="ml-1.5 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50"
               />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
             {sections.length === 0 ? (
-              <p className="text-muted-foreground py-6 text-center text-xs">
+              <p className="py-6 text-center text-muted-foreground text-xs">
                 {models.length === 0 ? t("models.noModels") : t("chats.noResults")}
               </p>
             ) : (
@@ -159,7 +159,7 @@ export function AddMemberContent({
                     className="sticky top-0 z-10 px-3 py-1"
                     style={{ backgroundColor: "var(--secondary)" }}
                   >
-                    <p className="text-muted-foreground text-[11px] font-semibold">
+                    <p className="font-semibold text-[11px] text-muted-foreground">
                       {section.title}
                     </p>
                   </div>
@@ -183,7 +183,7 @@ export function AddMemberContent({
                         }}
                         className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left text-[13px] transition-colors ${
                           isActive
-                            ? "bg-primary/10 text-primary font-medium"
+                            ? "bg-primary/10 font-medium text-primary"
                             : isSelected
                               ? "bg-primary/5 text-foreground hover:bg-primary/10"
                               : isExisting
@@ -229,17 +229,17 @@ export function AddMemberContent({
         <div className="flex min-h-0 w-1/2 flex-col">
           {activeModel && lastActiveIdentityId !== undefined ? (
             <>
-              <div className="border-border flex-shrink-0 border-b px-3 py-2.5">
-                <p className="text-foreground truncate text-[13px] font-semibold">
+              <div className="flex-shrink-0 border-border border-b px-3 py-2.5">
+                <p className="truncate font-semibold text-[13px] text-foreground">
                   {activeModel.displayName}
                 </p>
-                <p className="text-muted-foreground text-[11px]">{t("chat.selectRole")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("chat.selectRole")}</p>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {/* No role option */}
                 <button
                   onClick={() => updateLastMemberRole(activeModel.id, null)}
-                  className="active:bg-muted/50 flex w-full items-center gap-2 px-3 py-3 text-left transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors active:bg-muted/50"
                   style={{ borderBottom: "0.5px solid var(--border)" }}
                 >
                   <div
@@ -248,11 +248,11 @@ export function AddMemberContent({
                   >
                     <User size={12} className="text-muted-foreground" />
                   </div>
-                  <span className="text-foreground flex-1 truncate text-[13px]">
+                  <span className="flex-1 truncate text-[13px] text-foreground">
                     {t("chat.noIdentity")}
                   </span>
                   {lastActiveIdentityId === null && (
-                    <span className="text-primary text-xs font-semibold">✓</span>
+                    <span className="font-semibold text-primary text-xs">✓</span>
                   )}
                 </button>
 
@@ -261,7 +261,7 @@ export function AddMemberContent({
                   <button
                     key={identity.id}
                     onClick={() => updateLastMemberRole(activeModel.id, identity.id)}
-                    className="active:bg-muted/50 flex w-full items-center gap-2 px-3 py-3 text-left transition-colors"
+                    className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors active:bg-muted/50"
                     style={{ borderBottom: "0.5px solid var(--border)" }}
                   >
                     <div
@@ -270,14 +270,14 @@ export function AddMemberContent({
                         backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
                       }}
                     >
-                      <span className="text-primary text-[10px] font-bold">
+                      <span className="font-bold text-[10px] text-primary">
                         {identity.name.slice(0, 1)}
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-[13px]">{identity.name}</p>
+                      <p className="truncate text-[13px] text-foreground">{identity.name}</p>
                       {identity.systemPrompt && (
-                        <p className="text-muted-foreground truncate text-[11px]">
+                        <p className="truncate text-[11px] text-muted-foreground">
                           {identity.systemPrompt.length > 30
                             ? `${identity.systemPrompt.slice(0, 30)}…`
                             : identity.systemPrompt}
@@ -285,7 +285,7 @@ export function AddMemberContent({
                       )}
                     </div>
                     {lastActiveIdentityId === identity.id && (
-                      <span className="text-primary text-xs font-semibold">✓</span>
+                      <span className="font-semibold text-primary text-xs">✓</span>
                     )}
                   </button>
                 ))}
@@ -293,7 +293,7 @@ export function AddMemberContent({
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center px-4">
-              <p className="text-muted-foreground text-center text-xs">{t("chat.selectModel")}</p>
+              <p className="text-center text-muted-foreground text-xs">{t("chat.selectModel")}</p>
             </div>
           )}
         </div>
@@ -301,7 +301,7 @@ export function AddMemberContent({
 
       {/* Bottom: Selected members + confirm */}
       <div
-        className="border-border flex-shrink-0 border-t px-4 py-3"
+        className="flex-shrink-0 border-border border-t px-4 py-3"
         style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}
       >
         {selected.length > 0 && (
@@ -313,7 +313,7 @@ export function AddMemberContent({
               return (
                 <span
                   key={i}
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium"
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium text-[12px]"
                   style={{
                     backgroundColor: "color-mix(in srgb, var(--primary) 10%, transparent)",
                     color: "var(--foreground)",
@@ -336,7 +336,7 @@ export function AddMemberContent({
         <button
           onClick={handleConfirm}
           disabled={selected.length < minMembers}
-          className="w-full rounded-xl py-2.5 text-[15px] font-semibold transition-opacity disabled:opacity-40"
+          className="w-full rounded-xl py-2.5 font-semibold text-[15px] transition-opacity disabled:opacity-40"
           style={{ backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }}
         >
           {confirmLabel ?? t("common.confirm")}

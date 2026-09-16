@@ -18,14 +18,19 @@ vi.hoisted(() => {
   (globalThis as unknown as { localStorage: typeof storage }).localStorage = storage;
 });
 
-const { mockGetConversation, mockGetRecentMessages, mockInsertMessage, mockUpdateConversation, mockNotifyDbChange } =
-  vi.hoisted(() => ({
-    mockGetConversation: vi.fn(),
-    mockGetRecentMessages: vi.fn(),
-    mockInsertMessage: vi.fn(),
-    mockUpdateConversation: vi.fn(),
-    mockNotifyDbChange: vi.fn(),
-  }));
+const {
+  mockGetConversation,
+  mockGetRecentMessages,
+  mockInsertMessage,
+  mockUpdateConversation,
+  mockNotifyDbChange,
+} = vi.hoisted(() => ({
+  mockGetConversation: vi.fn(),
+  mockGetRecentMessages: vi.fn(),
+  mockInsertMessage: vi.fn(),
+  mockUpdateConversation: vi.fn(),
+  mockNotifyDbChange: vi.fn(),
+}));
 
 vi.mock("../../storage/database", () => ({
   getConversation: mockGetConversation,
@@ -89,10 +94,7 @@ vi.mock("../chat-generation", async (importOriginal) => {
   };
 });
 
-import {
-  buildApiMessagesForParticipant,
-  createUserMessage,
-} from "../chat-message-builder";
+import { buildApiMessagesForParticipant, createUserMessage } from "../chat-message-builder";
 import { dispatchMessageGeneration } from "../chat-dispatch";
 import type { StreamingState } from "../chat-generation";
 
@@ -167,7 +169,12 @@ describe("moderator summary", () => {
     it("filters summary-request messages out of the discussion context", () => {
       const conv = makeConversation();
       const messages = [
-        makeMessage({ id: "m1", role: "user", content: "normal question", status: MessageStatus.SUCCESS }),
+        makeMessage({
+          id: "m1",
+          role: "user",
+          content: "normal question",
+          status: MessageStatus.SUCCESS,
+        }),
         makeMessage({
           id: "m2",
           role: "user",
@@ -200,7 +207,9 @@ describe("moderator summary", () => {
         makeMessage({ id: "m2", content: "structured summary", kind: "summary" }),
       ];
       const apiMessages = buildApiMessagesForParticipant(messages, conv.participants[0], conv);
-      const contents = apiMessages.filter((m) => m.role === "assistant").map((m) => m.content as string);
+      const contents = apiMessages
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.content as string);
       expect(contents).toEqual(["debate", "structured summary"]);
     });
   });

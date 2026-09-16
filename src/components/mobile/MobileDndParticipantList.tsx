@@ -27,7 +27,6 @@ function MobileSortableRow({
   participant: p,
   index: idx,
   allParticipants,
-  getModelById,
   getIdentityById,
   onEditRole,
   onEditNickname,
@@ -40,7 +39,6 @@ function MobileSortableRow({
   participant: ConversationParticipant;
   index: number;
   allParticipants: ConversationParticipant[];
-  getModelById: (id: string) => any;
   getIdentityById: (id: string) => any;
   onEditRole: () => void;
   onEditNickname: () => void;
@@ -79,21 +77,21 @@ function MobileSortableRow({
           </svg>
         </button>
       )}
-      <span className="text-muted-foreground w-4 flex-shrink-0 text-center text-[11px]">
+      <span className="w-4 flex-shrink-0 text-center text-[11px] text-muted-foreground">
         {idx + 1}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-foreground truncate text-[13px] font-medium">
+        <p className="truncate font-medium text-[13px] text-foreground">
           {parts.nickname ?? parts.modelName}
           {parts.suffix && <span className="text-muted-foreground"> {parts.suffix}</span>}
         </p>
-        <p className="text-muted-foreground truncate text-[11px]">
+        <p className="truncate text-[11px] text-muted-foreground">
           {[parts.nickname ? parts.modelName : null, parts.identityName, parts.providerName]
             .filter(Boolean)
             .join(" · ")}
         </p>
         {stats && stats.messageCount > 0 && (
-          <p className="text-muted-foreground/60 flex items-center gap-1 text-[10px]">
+          <p className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
             <Activity size={9} />
             {formatTokenCount(stats.inputTokens)} in · {formatTokenCount(stats.outputTokens)} out
             {stats.toolCalls > 0 && ` · ${stats.toolCalls} tools`}
@@ -198,7 +196,6 @@ export function MobileDndParticipantList({
             participant={p}
             index={idx}
             allParticipants={participants}
-            getModelById={getModelById}
             getIdentityById={getIdentityById}
             onEditRole={() => onEditRole(p.id)}
             onEditNickname={() => onEditNickname(p.id)}

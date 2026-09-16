@@ -77,7 +77,7 @@ export function ImageSettingsPage() {
   return (
     <div className="h-full overflow-y-auto" style={{ backgroundColor: "var(--secondary)" }}>
       <div className="mx-auto max-w-lg px-4 pt-4 pb-10">
-        <div className="text-muted-foreground mb-3 flex items-center justify-between px-1 text-[13px]">
+        <div className="mb-3 flex items-center justify-between px-1 text-[13px] text-muted-foreground">
           <span>{t("settings.defaultImageModel")}</span>
           <span>{t("settings.imageModelsCount", { count: imageModels.length })}</span>
         </div>
@@ -85,7 +85,7 @@ export function ImageSettingsPage() {
         {imageModels.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-center">
             <ImageIcon size={30} className="text-muted-foreground/40" />
-            <p className="text-muted-foreground mt-3 text-sm">{t("settings.imageNotConfigured")}</p>
+            <p className="mt-3 text-muted-foreground text-sm">{t("settings.imageNotConfigured")}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg" style={{ backgroundColor: "var(--card)" }}>
@@ -102,10 +102,10 @@ export function ImageSettingsPage() {
                   }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-[15px] font-medium">
+                    <p className="truncate font-medium text-[15px] text-foreground">
                       {model.displayName}
                     </p>
-                    <p className="text-muted-foreground truncate text-[12px]">
+                    <p className="truncate text-[12px] text-muted-foreground">
                       {model.providerName} · {model.modelId}
                     </p>
                   </div>
@@ -125,7 +125,7 @@ export function ImageSettingsPage() {
               style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-foreground text-sm font-medium">
+                <span className="font-medium text-foreground text-sm">
                   {t("settings.addImageModel")}
                 </span>
                 <button
@@ -139,7 +139,7 @@ export function ImageSettingsPage() {
               <select
                 value={selectedProviderId}
                 onChange={(event) => setProviderId(event.target.value)}
-                className="text-foreground w-full rounded-md px-3 py-2.5 text-sm outline-none"
+                className="w-full rounded-md px-3 py-2.5 text-foreground text-sm outline-none"
                 style={{ backgroundColor: "var(--muted)" }}
                 aria-label={t("settings.imageModelProvider")}
               >
@@ -155,7 +155,7 @@ export function ImageSettingsPage() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleAddModel();
                 }}
-                className="text-foreground w-full rounded-md px-3 py-2.5 text-sm outline-none"
+                className="w-full rounded-md px-3 py-2.5 text-foreground text-sm outline-none"
                 style={{ backgroundColor: "var(--muted)" }}
                 placeholder="Model ID"
                 aria-label="Model ID"
@@ -163,7 +163,7 @@ export function ImageSettingsPage() {
               <button
                 onClick={handleAddModel}
                 disabled={!selectedProviderId || !modelId.trim()}
-                className="bg-primary w-full rounded-md py-2.5 text-sm font-medium text-white active:opacity-70 disabled:opacity-40"
+                className="w-full rounded-md bg-primary py-2.5 font-medium text-sm text-white active:opacity-70 disabled:opacity-40"
               >
                 {t("common.add")}
               </button>
@@ -172,7 +172,7 @@ export function ImageSettingsPage() {
             <button
               onClick={() => setShowAddModel(true)}
               disabled={compatibleProviders.length === 0}
-              className="text-primary flex w-full items-center justify-center gap-1.5 rounded-md py-2.5 text-sm font-medium active:opacity-70 disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md py-2.5 font-medium text-primary text-sm active:opacity-70 disabled:opacity-40"
               style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}
             >
               <Plus size={16} />

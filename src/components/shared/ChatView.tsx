@@ -50,7 +50,7 @@ export function ChatView({
   participants = [],
   keyboardInset = 0,
 }: ChatViewProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { confirm } = useConfirm();
   const activeBranchId = useChatStore((s: ChatState) => s.activeBranchId);
   const messages = useMessages(conversationId, activeBranchId);
@@ -341,13 +341,13 @@ export function ChatView({
     >
       <div className="flex items-center gap-2">
         <GitBranch size={14} color="var(--primary)" />
-        <span className="text-xs font-medium" style={{ color: "var(--primary)" }}>
+        <span className="font-medium text-xs" style={{ color: "var(--primary)" }}>
           {t("chat.branch")}
         </span>
       </div>
       <button
         onClick={() => switchBranch(null)}
-        className="rounded-md px-2.5 py-1 text-xs font-medium active:opacity-70"
+        className="rounded-md px-2.5 py-1 font-medium text-xs active:opacity-70"
         style={{
           backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
           color: "var(--primary)",
@@ -364,10 +364,10 @@ export function ChatView({
         {branchBanner}
         <div className="flex flex-1 flex-col items-center justify-center px-6">
           <IoChatbubbleOutline size={48} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
-          <p className="text-muted-foreground mt-4 text-lg font-medium">
+          <p className="mt-4 font-medium text-lg text-muted-foreground">
             {t("chats.startConversation")}
           </p>
-          <p className="text-muted-foreground/60 mt-1 text-center text-sm">{t("chat.message")}</p>
+          <p className="mt-1 text-center text-muted-foreground/60 text-sm">{t("chat.message")}</p>
         </div>
         <ChatInput
           onSend={handleSend}
@@ -414,7 +414,7 @@ export function ChatView({
         >
           <div className="flex flex-col items-center gap-1.5">
             <Paperclip size={28} color="var(--primary)" />
-            <span className="text-sm font-medium" style={{ color: "var(--primary)" }}>
+            <span className="font-medium text-sm" style={{ color: "var(--primary)" }}>
               {t("chat.dropFiles")}
             </span>
           </div>
@@ -472,7 +472,7 @@ export function ChatView({
             <ClipboardList size={14} color="var(--muted-foreground)" />
             {activeTaskCount > 0 && (
               <span
-                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-bold text-[10px] text-white"
                 style={{ backgroundColor: "var(--primary)" }}
               >
                 {activeTaskCount}

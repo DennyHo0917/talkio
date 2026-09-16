@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { APICallError } from "@ai-sdk/provider";
 import { RetryError } from "ai";
 
@@ -188,7 +188,9 @@ describe("AISdkRuntime event mapping", () => {
   it("throws from the stream are normalized to run-failed", async () => {
     mockStreamText.mockReturnValue({
       fullStream: {
+        // biome-ignore lint/correctness/useYield: The stream must fail before yielding an event.
         async *[Symbol.asyncIterator]() {
+          await Promise.resolve();
           throw apiError(401, false);
         },
       },

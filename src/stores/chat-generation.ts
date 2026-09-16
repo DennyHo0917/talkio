@@ -24,7 +24,6 @@ import { updateTask } from "../storage/database";
 import { getBuiltInToolDefs } from "../services/built-in-tools";
 import { getMcpToolDefsForIdentity, refreshMcpConnections } from "../services/mcp";
 import { generateId } from "../lib/id";
-import i18n from "../i18n";
 import { buildProviderHeaders } from "../services/provider-headers";
 import { resolveAdapterBaseUrl } from "../services/provider-request";
 import { AISdkRuntime, createModelResolver } from "../services/runtime/ai-sdk/ai-sdk-runtime";

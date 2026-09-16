@@ -27,13 +27,14 @@ export interface WorkspaceFileStatus {
 export function parseFileBlocks(text: string): { path: string; content: string }[] {
   const regex = /<file\s+path=["']([^"']+)["']\s*>([\s\S]*?)<\/file>/g;
   const blocks: { path: string; content: string }[] = [];
-  let match;
-  while ((match = regex.exec(text)) !== null) {
+  let match = regex.exec(text);
+  while (match !== null) {
     const path = match[1].trim();
     const content = match[2];
     if (path) {
       blocks.push({ path, content });
     }
+    match = regex.exec(text);
   }
   return blocks;
 }

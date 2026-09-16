@@ -44,7 +44,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
         <div className="mb-4 overflow-hidden rounded-xl" style={{ backgroundColor: "var(--card)" }}>
           <FormRow label={t("providerEdit.name")}>
             <input
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
+              className="flex-1 bg-transparent text-[16px] text-foreground outline-none"
               aria-label={t("providerEdit.name")}
               value={props.name}
               onChange={(e) => props.onNameChange(e.target.value)}
@@ -53,7 +53,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
           </FormRow>
           <FormRow label={t("providerEdit.baseUrl")} isLast={!props.showApiFormatSelector}>
             <input
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
+              className="flex-1 bg-transparent text-[16px] text-foreground outline-none"
               aria-label={t("providerEdit.baseUrl")}
               value={props.baseUrl}
               onChange={(e) => props.onBaseUrlChange(e.target.value)}
@@ -67,7 +67,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
                   <button
                     key={fmt}
                     onClick={() => props.onApiFormatChange(fmt)}
-                    className="rounded-full px-3 py-1 text-[13px] font-medium transition-colors"
+                    className="rounded-full px-3 py-1 font-medium text-[13px] transition-colors"
                     style={{
                       border: `1px solid ${props.apiFormat === fmt ? "var(--primary)" : "var(--border)"}`,
                       backgroundColor:
@@ -93,7 +93,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
           <input
             type={showApiKey ? "text" : "password"}
             aria-label={t("providerEdit.apiKey")}
-            className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
+            className="flex-1 bg-transparent text-[16px] text-foreground outline-none"
             value={props.apiKey}
             onChange={(e) => props.onApiKeyChange(e.target.value)}
             placeholder={t("providerEdit.apiKeyPlaceholder")}
@@ -113,7 +113,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
         onClick={() => setShowAdvanced(!showAdvanced)}
         className="mb-2 flex w-full items-center justify-between px-1 py-2"
       >
-        <span className="text-muted-foreground text-[13px] font-medium">
+        <span className="font-medium text-[13px] text-muted-foreground">
           {t("providerEdit.advancedSettings")}
         </span>
         {showAdvanced ? (
@@ -130,7 +130,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
             className="flex items-center justify-between px-4 py-3.5"
             style={{ borderBottom: "0.5px solid var(--border)" }}
           >
-            <span className="text-foreground text-[15px]">{t("providerEdit.enabled")}</span>
+            <span className="text-[15px] text-foreground">{t("providerEdit.enabled")}</span>
             <label className="relative inline-flex cursor-pointer items-center">
               <input
                 type="checkbox"
@@ -138,19 +138,19 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
                 onChange={(e) => props.onProviderEnabledChange(e.target.checked)}
                 className="peer sr-only"
               />
-              <div className="peer-checked:bg-primary bg-muted-foreground/30 h-6 w-11 rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full" />
+              <div className="h-6 w-11 rounded-full bg-muted-foreground/30 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full" />
             </label>
           </div>
 
           {/* Custom Headers */}
           <div className="px-4 py-3.5">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-foreground text-[14px]">{t("providerEdit.customHeaders")}</span>
+              <span className="text-[14px] text-foreground">{t("providerEdit.customHeaders")}</span>
               <button
                 onClick={() =>
                   props.onCustomHeadersChange([...props.customHeaders, { name: "", value: "" }])
                 }
-                className="flex items-center gap-1 text-[13px] font-medium active:opacity-60"
+                className="flex items-center gap-1 font-medium text-[13px] active:opacity-60"
                 style={{ color: "var(--primary)" }}
               >
                 <IoAdd size={14} color="var(--primary)" />
@@ -160,7 +160,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
             {props.customHeaders.map((h: CustomHeader, idx: number) => (
               <div key={idx} className="mb-2 flex items-center gap-2">
                 <input
-                  className="text-foreground flex-1 rounded-lg px-3 py-2 text-[14px] outline-none"
+                  className="flex-1 rounded-lg px-3 py-2 text-[14px] text-foreground outline-none"
                   style={{ backgroundColor: "var(--muted)" }}
                   value={h.name}
                   onChange={(e) => {
@@ -171,7 +171,7 @@ export function ProviderConfigForm(props: ProviderConfigFormProps) {
                   placeholder={t("providerEdit.customHeaderName")}
                 />
                 <input
-                  className="text-foreground flex-1 rounded-lg px-3 py-2 text-[14px] outline-none"
+                  className="flex-1 rounded-lg px-3 py-2 text-[14px] text-foreground outline-none"
                   style={{ backgroundColor: "var(--muted)" }}
                   value={h.value}
                   onChange={(e) => {
@@ -214,7 +214,7 @@ function FormRow({
       className="flex items-center px-4 py-3.5"
       style={{ borderBottom: isLast ? "none" : "0.5px solid var(--border)" }}
     >
-      <span className="text-foreground w-24 flex-shrink-0 text-[15px]">{label}</span>
+      <span className="w-24 flex-shrink-0 text-[15px] text-foreground">{label}</span>
       {children}
     </div>
   );

@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 
 export type BackupSecretsChoice = boolean | null;
 
@@ -68,11 +62,7 @@ export function useBackupSecretsChoice() {
             <Button variant="secondary" className="w-full sm:w-auto" onClick={() => close(false)}>
               {t("settings.exportWithoutSecrets")}
             </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              onClick={() => close(true)}
-            >
+            <Button variant="destructive" className="w-full sm:w-auto" onClick={() => close(true)}>
               {t("settings.exportWithSecrets")}
             </Button>
           </div>

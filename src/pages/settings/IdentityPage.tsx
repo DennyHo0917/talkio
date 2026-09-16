@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { Store } from "lucide-react";
 import {
   IoPersonOutline,
-  IoAddCircleOutline,
   IoTrashOutline,
   IoChevronForward,
   IoChevronBack,
@@ -120,7 +119,7 @@ export function IdentityPage() {
         {/* Header: title + search + add */}
         <div className="flex-shrink-0 px-4 pt-2 pb-1">
           <div className="mb-1 flex items-center justify-between">
-            <h1 className="text-foreground text-[20px] font-bold tracking-tight">
+            <h1 className="font-bold text-[20px] text-foreground tracking-tight">
               {t("personas.title")}
             </h1>
             <div className="flex items-center gap-1">
@@ -156,7 +155,7 @@ export function IdentityPage() {
             >
               <IoSearchOutline size={18} color="var(--muted-foreground)" />
               <input
-                className="text-foreground ml-2 flex-1 bg-transparent text-[15px] outline-none"
+                className="ml-2 flex-1 bg-transparent text-[15px] text-foreground outline-none"
                 placeholder={t("personas.searchIdentities")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -206,7 +205,6 @@ export function IdentityPage() {
 // ── Identity Edit Page (full-screen route) ──
 
 export function IdentityEditPage({ id, onClose }: { id?: string; onClose?: () => void } = {}) {
-  const { t } = useTranslation();
   const goBack = onClose ?? (() => window.history.back());
   const getIdentityById = useIdentityStore((s) => s.getIdentityById);
   const addIdentity = useIdentityStore((s) => s.addIdentity);
@@ -254,14 +252,14 @@ function IdentityItem({
         className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3 text-left"
       >
         <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-semibold text-sm text-white"
           style={{ backgroundColor: avatarColor }}
         >
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-foreground truncate text-[16px] font-medium">{identity.name}</p>
-          <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[13px] leading-relaxed">
+          <p className="truncate font-medium text-[16px] text-foreground">{identity.name}</p>
+          <p className="mt-0.5 line-clamp-2 text-[13px] text-muted-foreground leading-relaxed">
             {identity.systemPrompt}
           </p>
         </div>
@@ -418,7 +416,7 @@ function IdentityForm({
             {t("common.cancel")}
           </span>
         </button>
-        <span className="text-foreground flex-1 text-center text-[17px] font-semibold">
+        <span className="flex-1 text-center font-semibold text-[17px] text-foreground">
           {isNew ? t("personas.createIdentity") : t("personas.editIdentity")}
         </span>
         <button
@@ -426,7 +424,7 @@ function IdentityForm({
           disabled={!name.trim() || !systemPrompt.trim()}
           className="flex min-w-[60px] justify-end px-3 py-1 active:opacity-60 disabled:opacity-30"
         >
-          <span className="text-[17px] font-semibold" style={{ color: "var(--primary)" }}>
+          <span className="font-semibold text-[17px]" style={{ color: "var(--primary)" }}>
             {t("common.save")}
           </span>
         </button>
@@ -437,7 +435,7 @@ function IdentityForm({
           {/* ── Section: AI Generate (new only) ── */}
           {isNew && enabledModels.length > 0 && (
             <>
-              <p className="text-muted-foreground px-4 pb-1.5 text-[13px] font-normal tracking-wide uppercase">
+              <p className="px-4 pb-1.5 font-normal text-[13px] text-muted-foreground uppercase tracking-wide">
                 {t("identityEdit.aiGenerate")}
               </p>
               <div
@@ -449,7 +447,7 @@ function IdentityForm({
                     value={aiDesc}
                     onChange={(e) => setAiDesc(e.target.value)}
                     placeholder={t("identityEdit.aiDescPlaceholder")}
-                    className="text-foreground w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none"
+                    className="w-full resize-none bg-transparent text-[15px] text-foreground leading-relaxed outline-none"
                     style={{ minHeight: 64 }}
                   />
                 </div>
@@ -458,10 +456,10 @@ function IdentityForm({
                     onClick={() => setShowModelPicker(true)}
                     className="flex flex-1 items-center justify-between active:opacity-80"
                   >
-                    <span className="text-muted-foreground truncate text-[15px]">
+                    <span className="truncate text-[15px] text-muted-foreground">
                       {selectedAiModel?.displayName ?? t("identityEdit.aiSelectModel")}
                     </span>
-                    <span className="text-muted-foreground ml-1 text-[13px]">▾</span>
+                    <span className="ml-1 text-[13px] text-muted-foreground">▾</span>
                   </button>
                   <button
                     onClick={handleAiGenerate}
@@ -474,7 +472,7 @@ function IdentityForm({
                     ) : (
                       <IoSparkles size={14} color="#fff" />
                     )}
-                    <span className="text-[13px] font-semibold">{t("identityEdit.generate")}</span>
+                    <span className="font-semibold text-[13px]">{t("identityEdit.generate")}</span>
                   </button>
                 </div>
               </div>
@@ -482,7 +480,7 @@ function IdentityForm({
           )}
 
           {/* ── Section: Basic Info ── */}
-          <p className="text-muted-foreground px-4 pb-1.5 text-[13px] font-normal tracking-wide uppercase">
+          <p className="px-4 pb-1.5 font-normal text-[13px] text-muted-foreground uppercase tracking-wide">
             {t("identityEdit.name")}
           </p>
           <div
@@ -494,13 +492,13 @@ function IdentityForm({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("identityEdit.namePlaceholder")}
-                className="text-foreground flex-1 bg-transparent py-[11px] text-[17px] outline-none"
+                className="flex-1 bg-transparent py-[11px] text-[17px] text-foreground outline-none"
               />
             </div>
           </div>
 
           {/* ── Section: System Prompt ── */}
-          <p className="text-muted-foreground px-4 pb-1.5 text-[13px] font-normal tracking-wide uppercase">
+          <p className="px-4 pb-1.5 font-normal text-[13px] text-muted-foreground uppercase tracking-wide">
             {t("identityEdit.systemPrompt")}
           </p>
           <div
@@ -512,14 +510,14 @@ function IdentityForm({
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 placeholder={t("identityEdit.systemPromptPlaceholder")}
-                className="text-foreground w-full resize-none bg-transparent text-[15px] leading-relaxed outline-none"
+                className="w-full resize-none bg-transparent text-[15px] text-foreground leading-relaxed outline-none"
                 style={{ minHeight: 120 }}
               />
             </div>
           </div>
 
           {/* ── Section: Parameters ── */}
-          <p className="text-muted-foreground px-4 pb-1.5 text-[13px] font-normal tracking-wide uppercase">
+          <p className="px-4 pb-1.5 font-normal text-[13px] text-muted-foreground uppercase tracking-wide">
             {t("identityEdit.parameters")}
           </p>
           <div
@@ -529,8 +527,8 @@ function IdentityForm({
             {/* Temperature */}
             <div className="px-4 py-3" style={{ borderBottom: "0.5px solid var(--border)" }}>
               <div className="flex items-center justify-between">
-                <span className="text-foreground text-[15px]">{t("identityEdit.temperature")}</span>
-                <span className="text-muted-foreground font-mono text-[15px] tabular-nums">
+                <span className="text-[15px] text-foreground">{t("identityEdit.temperature")}</span>
+                <span className="font-mono text-[15px] text-muted-foreground tabular-nums">
                   {temperature.toFixed(1)}
                 </span>
               </div>
@@ -563,7 +561,7 @@ function IdentityForm({
           {/* ── Section: Tool Binding ── */}
           {(identitySelectableBuiltInTools.length > 0 || mcpServers.length > 0) && (
             <>
-              <p className="text-muted-foreground px-4 pb-1.5 text-[13px] font-normal tracking-wide uppercase">
+              <p className="px-4 pb-1.5 font-normal text-[13px] text-muted-foreground uppercase tracking-wide">
                 {t("identityEdit.bindTools")}
               </p>
 
@@ -586,8 +584,8 @@ function IdentityForm({
                         }}
                       >
                         <div className="mr-3 min-w-0 flex-1">
-                          <p className="text-foreground text-[15px]">{tool.name}</p>
-                          <p className="text-muted-foreground line-clamp-1 text-[13px]">
+                          <p className="text-[15px] text-foreground">{tool.name}</p>
+                          <p className="line-clamp-1 text-[13px] text-muted-foreground">
                             {tool.description}
                           </p>
                         </div>
@@ -598,7 +596,7 @@ function IdentityForm({
                             onChange={() => toggleTool(tool.name)}
                             className="peer sr-only"
                           />
-                          <div className="peer-checked:bg-primary bg-muted-foreground/30 h-[31px] w-[51px] rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:after:translate-x-5" />
+                          <div className="h-[31px] w-[51px] rounded-full bg-muted-foreground/30 after:absolute after:top-[2px] after:left-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-5" />
                         </label>
                       </div>
                     );
@@ -623,8 +621,8 @@ function IdentityForm({
                         }}
                       >
                         <div className="mr-3 min-w-0 flex-1">
-                          <p className="text-foreground text-[15px]">{srv.name}</p>
-                          <p className="text-muted-foreground truncate text-[13px]">{srv.url}</p>
+                          <p className="text-[15px] text-foreground">{srv.name}</p>
+                          <p className="truncate text-[13px] text-muted-foreground">{srv.url}</p>
                         </div>
                         <label className="relative inline-flex flex-shrink-0 cursor-pointer items-center">
                           <input
@@ -633,7 +631,7 @@ function IdentityForm({
                             onChange={() => toggleServer(srv.id)}
                             className="peer sr-only"
                           />
-                          <div className="peer-checked:bg-primary bg-muted-foreground/30 h-[31px] w-[51px] rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:after:translate-x-5" />
+                          <div className="h-[31px] w-[51px] rounded-full bg-muted-foreground/30 after:absolute after:top-[2px] after:left-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-5" />
                         </label>
                       </div>
                     );

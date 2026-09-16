@@ -54,17 +54,17 @@ export function ToolApprovalDialog() {
         </DialogHeader>
         {current && (
           <div className="space-y-2">
-            <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground text-xs">
               {current.participantName && <span>{current.participantName}</span>}
               {current.modelName && <span>{current.modelName}</span>}
               <span className="font-medium uppercase">{current.risk}</span>
             </div>
-            <div className="bg-muted/50 rounded-md p-3">
-              <p className="text-sm font-medium break-all">{current.toolName}</p>
+            <div className="rounded-md bg-muted/50 p-3">
+              <p className="break-all font-medium text-sm">{current.toolName}</p>
               {current.description && (
-                <p className="text-muted-foreground mt-1 text-xs">{current.description}</p>
+                <p className="mt-1 text-muted-foreground text-xs">{current.description}</p>
               )}
-              <pre className="text-muted-foreground mt-2 max-h-40 overflow-auto text-xs break-all whitespace-pre-wrap">
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all text-muted-foreground text-xs">
                 {JSON.stringify(current.args, null, 2)}
               </pre>
             </div>

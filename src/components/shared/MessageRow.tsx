@@ -141,7 +141,7 @@ function AssistantActionBar({
             style={{ backgroundColor: "var(--muted)" }}
           >
             <IoAnalyticsOutline size={11} color="var(--muted-foreground)" />
-            <span className="text-muted-foreground font-mono text-[10px]">
+            <span className="font-mono text-[10px] text-muted-foreground">
               {formatTokens(message.tokenUsage.inputTokens)}→
               {formatTokens(message.tokenUsage.outputTokens)}
             </span>
@@ -184,7 +184,7 @@ function AssistantActionBar({
                   }}
                 >
                   <GitBranch size={15} color="var(--foreground)" />
-                  <span className="text-foreground text-[13px]">{t("chat.branchFromHere")}</span>
+                  <span className="text-[13px] text-foreground">{t("chat.branchFromHere")}</span>
                 </button>
               )}
               {onPromoteToTask && (
@@ -196,7 +196,7 @@ function AssistantActionBar({
                   }}
                 >
                   <ClipboardList size={15} color="var(--foreground)" />
-                  <span className="text-foreground text-[13px]">{t("chat.promoteToTask")}</span>
+                  <span className="text-[13px] text-foreground">{t("chat.promoteToTask")}</span>
                 </button>
               )}
               <button
@@ -208,7 +208,7 @@ function AssistantActionBar({
                 }}
               >
                 <IoShareOutline size={15} color="var(--foreground)" />
-                <span className="text-foreground text-[13px]">{t("chat.export")}</span>
+                <span className="text-[13px] text-foreground">{t("chat.export")}</span>
               </button>
               {onDelete && (
                 <>
@@ -416,10 +416,10 @@ export const MessageRow = memo(function MessageRow({
       return (
         <div data-message-id={message.id} className="group mb-6 flex flex-col items-end gap-1 px-4">
           <div className="mr-1 flex items-baseline gap-2">
-            <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+            <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
               🎙️ {t("chat.summaryRequestLabel")}
             </span>
-            <span className="text-muted-foreground/60 text-[10px]">
+            <span className="text-[10px] text-muted-foreground/60">
               {formatTime(message.createdAt)}
             </span>
           </div>
@@ -432,7 +432,7 @@ export const MessageRow = memo(function MessageRow({
               borderTopRightRadius: 0,
             }}
           >
-            <p className="text-foreground text-[14px] leading-relaxed break-words whitespace-pre-wrap">
+            <p className="whitespace-pre-wrap break-words text-[14px] text-foreground leading-relaxed">
               {content}
             </p>
           </div>
@@ -445,7 +445,7 @@ export const MessageRow = memo(function MessageRow({
                 className="flex items-center gap-1 rounded-md px-1.5 py-1 active:opacity-60"
               >
                 <IoTrashOutline size={13} color="var(--destructive)" />
-                <span className="text-[11px] font-medium" style={{ color: "var(--destructive)" }}>
+                <span className="font-medium text-[11px]" style={{ color: "var(--destructive)" }}>
                   {t("common.delete")}
                 </span>
               </button>
@@ -466,10 +466,10 @@ export const MessageRow = memo(function MessageRow({
             className="group mb-6 flex flex-col items-end gap-1 px-4"
           >
             <div className="mr-1 flex items-baseline gap-2">
-              <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+              <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
                 📋 {t("chat.tasks")}
               </span>
-              <span className="text-muted-foreground/60 text-[10px]">
+              <span className="text-[10px] text-muted-foreground/60">
                 {formatTime(message.createdAt)}
               </span>
             </div>
@@ -482,15 +482,15 @@ export const MessageRow = memo(function MessageRow({
                 borderTopRightRadius: 0,
               }}
             >
-              <p className="text-foreground text-[14px] font-semibold break-words">{task.title}</p>
+              <p className="break-words font-semibold text-[14px] text-foreground">{task.title}</p>
               {task.description && (
-                <p className="text-muted-foreground mt-0.5 text-[12px] leading-relaxed break-words whitespace-pre-wrap">
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-muted-foreground leading-relaxed">
                   {task.description}
                 </p>
               )}
               <div className="mt-2 flex items-center gap-2">
                 <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  className="rounded-full px-2 py-0.5 font-semibold text-[10px]"
                   style={{
                     backgroundColor:
                       task.status === "done"
@@ -515,7 +515,7 @@ export const MessageRow = memo(function MessageRow({
                 {task.status === "running" && onPauseTask && (
                   <button
                     onClick={() => onPauseTask(task.id)}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
                     style={{
                       backgroundColor: "var(--secondary)",
                       color: "var(--muted-foreground)",
@@ -528,7 +528,7 @@ export const MessageRow = memo(function MessageRow({
                 {task.status === "paused" && onResumeTask && (
                   <button
                     onClick={() => onResumeTask(task.id)}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
                     style={{
                       backgroundColor: "color-mix(in srgb, #22c55e 15%, transparent)",
                       color: "#22c55e",
@@ -541,7 +541,7 @@ export const MessageRow = memo(function MessageRow({
                 {task.status === "failed" && onRetryTask && (
                   <button
                     onClick={() => onRetryTask(task.id)}
-                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
                     style={{
                       backgroundColor: "color-mix(in srgb, var(--destructive) 12%, transparent)",
                       color: "var(--destructive)",
@@ -560,10 +560,10 @@ export const MessageRow = memo(function MessageRow({
       return (
         <div data-message-id={message.id} className="group mb-6 flex flex-col items-end gap-1 px-4">
           <div className="mr-1 flex items-baseline gap-2">
-            <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+            <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
               📋 {t("chat.tasks")}
             </span>
-            <span className="text-muted-foreground/60 text-[10px]">
+            <span className="text-[10px] text-muted-foreground/60">
               {formatTime(message.createdAt)}
             </span>
           </div>
@@ -576,7 +576,7 @@ export const MessageRow = memo(function MessageRow({
               borderTopRightRadius: 0,
             }}
           >
-            <p className="text-foreground text-[14px] leading-relaxed break-words whitespace-pre-wrap">
+            <p className="whitespace-pre-wrap break-words text-[14px] text-foreground leading-relaxed">
               {content}
             </p>
           </div>
@@ -587,10 +587,10 @@ export const MessageRow = memo(function MessageRow({
       <div data-message-id={message.id} className="group mb-6 flex flex-col items-end gap-1 px-4">
         {/* Label */}
         <div className="mr-1 flex items-baseline gap-2">
-          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+          <span className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">
             {t("chat.you")}
           </span>
-          <span className="text-muted-foreground/60 text-[10px]">
+          <span className="text-[10px] text-muted-foreground/60">
             {formatTime(message.createdAt)}
           </span>
         </div>
@@ -617,7 +617,7 @@ export const MessageRow = memo(function MessageRow({
                 }}
               >
                 <FileText size={12} color="white" className="flex-shrink-0" />
-                <span className="max-w-[140px] truncate text-[11px] font-medium text-white">
+                <span className="max-w-[140px] truncate font-medium text-[11px] text-white">
                   {name}
                 </span>
               </div>
@@ -643,7 +643,7 @@ export const MessageRow = memo(function MessageRow({
                     confirmEdit();
                   }
                 }}
-                className="text-foreground w-full resize-none bg-transparent py-3 text-[15px] leading-relaxed outline-none"
+                className="w-full resize-none bg-transparent py-3 text-[15px] text-foreground leading-relaxed outline-none"
                 style={{ minHeight: "60px" }}
                 rows={Math.max(2, editText.split("\n").length)}
               />
@@ -651,7 +651,7 @@ export const MessageRow = memo(function MessageRow({
             <div className="mt-2 flex justify-end gap-2">
               <button
                 onClick={cancelEditing}
-                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium active:opacity-70"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 font-medium text-[13px] active:opacity-70"
                 style={{ backgroundColor: "var(--secondary)", color: "var(--muted-foreground)" }}
               >
                 <X size={14} />
@@ -659,7 +659,7 @@ export const MessageRow = memo(function MessageRow({
               </button>
               <button
                 onClick={confirmEdit}
-                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium text-white active:opacity-70"
+                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 font-medium text-[13px] text-white active:opacity-70"
                 style={{ backgroundColor: "var(--primary)" }}
               >
                 <Check size={14} />
@@ -676,7 +676,7 @@ export const MessageRow = memo(function MessageRow({
               borderTopRightRadius: 0,
             }}
           >
-            <p className="text-[15px] leading-relaxed break-words whitespace-pre-wrap text-white">
+            <p className="whitespace-pre-wrap break-words text-[15px] text-white leading-relaxed">
               {content || (message.images?.length ? "📷" : "")}
             </p>
           </div>
@@ -708,7 +708,7 @@ export const MessageRow = memo(function MessageRow({
   const { color: senderColor } = getAvatarProps(senderName);
 
   // Prefer current participant metadata so nickname changes also update historical messages.
-  const labelParts = useMemo(() => {
+  const labelParts = (() => {
     if (senderParticipant) return getParticipantLabelParts(senderParticipant, participants);
     if (!message.senderModelId) return null;
     const providerStore = useProviderStore.getState();
@@ -726,20 +726,14 @@ export const MessageRow = memo(function MessageRow({
       if (match) suffix = `#${match[1]}`;
     }
     return { nickname: null, modelName, identityName, providerName, suffix };
-  }, [
-    message.senderModelId,
-    message.identityId,
-    message.senderName,
-    senderParticipant,
-    participants,
-  ]);
+  })();
 
   return (
     <div data-message-id={message.id} className="group mb-6 flex flex-col gap-1 px-4">
       {/* Label */}
       <div className="ml-1 flex items-baseline gap-2">
         <span
-          className="max-w-[360px] truncate text-[11px] font-semibold tracking-wider"
+          className="max-w-[360px] truncate font-semibold text-[11px] tracking-wider"
           style={{ color: senderColor }}
         >
           {labelParts ? (
@@ -763,7 +757,7 @@ export const MessageRow = memo(function MessageRow({
           )}
           {(message.kind === "summary" || message.kind === "task-result") && (
             <span
-              className="ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase"
+              className="ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold text-[9px] uppercase tracking-wide"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
                 color: "var(--primary)",
@@ -777,7 +771,7 @@ export const MessageRow = memo(function MessageRow({
             </span>
           )}
         </span>
-        <span className="text-muted-foreground/60 text-[10px]">
+        <span className="text-[10px] text-muted-foreground/60">
           {formatTime(message.createdAt)}
         </span>
       </div>
@@ -794,13 +788,13 @@ export const MessageRow = memo(function MessageRow({
         >
           {isStreaming && !content && !message.reasoningContent ? (
             <div className="flex items-center gap-1.5 py-1">
-              <span className="bg-muted-foreground/40 inline-block h-[7px] w-[7px] animate-pulse rounded-full" />
+              <span className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-muted-foreground/40" />
               <span
-                className="bg-muted-foreground/40 inline-block h-[7px] w-[7px] animate-pulse rounded-full"
+                className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-muted-foreground/40"
                 style={{ animationDelay: "0.15s" }}
               />
               <span
-                className="bg-muted-foreground/40 inline-block h-[7px] w-[7px] animate-pulse rounded-full"
+                className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-muted-foreground/40"
                 style={{ animationDelay: "0.3s" }}
               />
             </div>
@@ -812,24 +806,24 @@ export const MessageRow = memo(function MessageRow({
 
       {imageGenerationPending && (
         <div
-          className="border-border bg-muted/60 flex aspect-[4/3] w-full max-w-[400px] items-center justify-center rounded-lg border border-dashed"
+          className="flex aspect-[4/3] w-full max-w-[400px] items-center justify-center rounded-lg border border-border border-dashed bg-muted/60"
           aria-live="polite"
         >
-          <div className="text-muted-foreground flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <div className="relative">
               <ImageIcon size={28} className="opacity-40" />
               <Loader2
                 size={16}
-                className="bg-muted absolute -right-2 -bottom-1 animate-spin rounded-full"
+                className="absolute -right-2 -bottom-1 animate-spin rounded-full bg-muted"
               />
             </div>
-            <span className="text-xs font-medium">{t("chat.generatingImage")}</span>
+            <span className="font-medium text-xs">{t("chat.generatingImage")}</span>
           </div>
         </div>
       )}
 
       {directImageCancelled && (
-        <div className="text-muted-foreground flex items-center gap-1.5 px-1 py-1 text-xs">
+        <div className="flex items-center gap-1.5 px-1 py-1 text-muted-foreground text-xs">
           <X size={13} />
           <span>{t("chat.cancelled")}</span>
         </div>
@@ -885,7 +879,7 @@ export const MessageRow = memo(function MessageRow({
                       <Wrench size={13} color="var(--muted-foreground)" className="flex-shrink-0" />
                     )}
                     <span
-                      className={`truncate text-[12px] font-medium ${isPending ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+                      className={`truncate font-medium text-[12px] ${isPending ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                     >
                       {isPending
                         ? `${tc.name}…`
@@ -906,7 +900,7 @@ export const MessageRow = memo(function MessageRow({
                     className="mt-0.5 rounded-lg px-2.5 py-2"
                     style={{ backgroundColor: "var(--muted)" }}
                   >
-                    <p className="text-muted-foreground text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+                    <p className="whitespace-pre-wrap break-all text-[11px] text-muted-foreground leading-relaxed">
                       {result.content.slice(0, 1000)}
                       {result.content.length > 1000 ? " …" : ""}
                     </p>
@@ -925,7 +919,7 @@ export const MessageRow = memo(function MessageRow({
             {pendingFileBlocks.map((block, idx) => {
               const status = pendingFileStatuses?.find((s) => s.path === block.path);
               const isExpanded = expandedPendingFiles.has(block.path);
-              const previewText = (status?.exists ? status.currentContent : block.content) || "";
+              const _previewText = (status?.exists ? status.currentContent : block.content) || "";
               return (
                 <div
                   key={idx}
@@ -937,11 +931,11 @@ export const MessageRow = memo(function MessageRow({
                 >
                   <div className="flex items-center gap-2 px-2.5 py-2">
                     <FileText size={13} color="var(--muted-foreground)" className="flex-shrink-0" />
-                    <span className="text-foreground min-w-0 flex-1 truncate text-[12px] font-medium">
+                    <span className="min-w-0 flex-1 truncate font-medium text-[12px] text-foreground">
                       {block.path}
                     </span>
                     <span
-                      className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      className="rounded px-1.5 py-0.5 font-medium text-[10px]"
                       style={{
                         backgroundColor: status?.exists
                           ? "color-mix(in srgb, var(--destructive) 10%, transparent)"
@@ -971,7 +965,7 @@ export const MessageRow = memo(function MessageRow({
                     {onApplyFileBlocks && (
                       <button
                         onClick={() => onApplyFileBlocks(message.id, block.path)}
-                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-opacity active:opacity-70"
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-[11px] transition-opacity active:opacity-70"
                         style={{
                           backgroundColor: "color-mix(in srgb, var(--primary) 10%, var(--muted))",
                           color: "var(--primary)",
@@ -989,20 +983,20 @@ export const MessageRow = memo(function MessageRow({
                     >
                       {status?.exists && status.currentContent !== undefined && (
                         <div className="mb-2">
-                          <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                          <div className="mb-1 font-semibold text-[10px] text-muted-foreground uppercase">
                             {t("chat.currentFile")}
                           </div>
-                          <pre className="text-muted-foreground max-h-40 overflow-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground leading-relaxed">
                             {status.currentContent.slice(0, 1200)}
                             {status.currentContent.length > 1200 ? "\n…" : ""}
                           </pre>
                         </div>
                       )}
                       <div>
-                        <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
+                        <div className="mb-1 font-semibold text-[10px] text-muted-foreground uppercase">
                           {t("chat.generatedFile")}
                         </div>
-                        <pre className="text-foreground max-h-48 overflow-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
+                        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[11px] text-foreground leading-relaxed">
                           {block.content.slice(0, 1600)}
                           {block.content.length > 1600 ? "\n…" : ""}
                         </pre>
@@ -1017,7 +1011,7 @@ export const MessageRow = memo(function MessageRow({
             <div>
               <button
                 onClick={() => onApplyFileBlocks(message.id)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-opacity active:opacity-70"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-[12px] transition-opacity active:opacity-70"
                 style={{
                   backgroundColor: "color-mix(in srgb, var(--primary) 10%, var(--muted))",
                   color: "var(--primary)",
@@ -1056,7 +1050,7 @@ export const MessageRow = memo(function MessageRow({
             >
               <Save size={13} color="var(--primary)" className="flex-shrink-0" />
               <span
-                className="max-w-[200px] truncate text-[12px] font-medium"
+                className="max-w-[200px] truncate font-medium text-[12px]"
                 style={{ color: "var(--primary)" }}
               >
                 {wf.path}

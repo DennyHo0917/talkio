@@ -10,7 +10,11 @@ const GITHUB_URL = "https://github.com/llt22/talkio";
 const RELEASES_API_URL = "https://api.github.com/repos/llt22/talkio/releases/latest";
 
 function compareVersions(left: string, right: string): number {
-  const parse = (value: string) => value.replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
+  const parse = (value: string) =>
+    value
+      .replace(/^v/i, "")
+      .split(".")
+      .map((part) => Number(part) || 0);
   const a = parse(left);
   const b = parse(right);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
@@ -73,9 +77,9 @@ export function AboutPage() {
     <div className="h-full overflow-y-auto" style={{ backgroundColor: "var(--secondary)" }}>
       <div className="mx-auto max-w-lg px-4 pt-10 pb-10">
         <div className="flex flex-col items-center gap-2 py-6">
-          <div className="text-foreground text-[24px] font-bold tracking-tight">Talkio</div>
-          {version && <div className="text-muted-foreground text-[14px]">v{version}</div>}
-          <p className="text-muted-foreground mt-2 px-6 text-center text-[13px] leading-relaxed">
+          <div className="font-bold text-[24px] text-foreground tracking-tight">Talkio</div>
+          {version && <div className="text-[14px] text-muted-foreground">v{version}</div>}
+          <p className="mt-2 px-6 text-center text-[13px] text-muted-foreground leading-relaxed">
             {t("settings.aboutDescription")}
           </p>
         </div>
@@ -86,18 +90,22 @@ export function AboutPage() {
             disabled={checking || !version}
             className="flex w-full items-center px-4 py-3.5 transition-colors active:bg-black/5 disabled:opacity-50"
           >
-            <RefreshCw size={18} color="var(--muted-foreground)" className={`mr-3 flex-shrink-0 ${checking ? "animate-spin" : ""}`} />
-            <span className="text-foreground flex-1 text-left text-[16px]">
+            <RefreshCw
+              size={18}
+              color="var(--muted-foreground)"
+              className={`mr-3 flex-shrink-0 ${checking ? "animate-spin" : ""}`}
+            />
+            <span className="flex-1 text-left text-[16px] text-foreground">
               {checking ? t("settings.checkingForUpdates") : t("settings.checkForUpdates")}
             </span>
-            <span className="text-muted-foreground text-[13px]">{updateMessage}</span>
+            <span className="text-[13px] text-muted-foreground">{updateMessage}</span>
           </button>
           <button
             onClick={openGithub}
             className="flex w-full items-center px-4 py-3.5 transition-colors active:bg-black/5"
           >
             <Github size={18} color="var(--muted-foreground)" className="mr-3 flex-shrink-0" />
-            <span className="text-foreground flex-1 text-left text-[16px]">
+            <span className="flex-1 text-left text-[16px] text-foreground">
               {t("settings.aboutGithub")}
             </span>
             <ChevronRight size={18} color="var(--muted-foreground)" />

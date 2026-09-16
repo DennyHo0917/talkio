@@ -17,7 +17,6 @@ import {
   wrapLanguageModel,
   type JSONSchema7,
   type LanguageModel,
-  type ModelMessage,
   type ToolSet,
 } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -103,7 +102,7 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModelV4 {
         opts.modelId,
       );
       break;
-    default:
+    default: {
       // OpenAI-compatible covers real OpenAI + third-party gateways and, unlike
       // @ai-sdk/openai, surfaces `delta.reasoning` (build4ai / OpenRouter / etc.)
       // so reasoning models show their thinking.
@@ -121,6 +120,7 @@ export function getLanguageModel(opts: ModelResolveOptions): LanguageModelV4 {
         includeUsage: true,
       }).chatModel(opts.modelId);
       break;
+    }
   }
   return wrapLanguageModel({
     model,
@@ -347,12 +347,13 @@ export class AISdkRuntime implements ParticipantRuntime {
                     result: `Error: ${event.error instanceof Error ? event.error.message : String(event.error)}`,
                   };
                   break;
-                case "finish":
+                case "finish": {
                   const finalUsage = completeUsage(event.totalUsage);
                   if (finalUsage) yield { type: "usage", usage: finalUsage };
                   yield { type: "run-completed", reason: event.finishReason };
                   terminated = true;
                   break;
+                }
                 case "abort":
                   yield {
                     type: "run-failed",

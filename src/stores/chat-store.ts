@@ -16,7 +16,6 @@ import { type StreamingState } from "./chat-generation";
 import { toolApproval } from "../services/tool-approval";
 import { dispatchMessageGeneration, runAutoDiscuss } from "./chat-dispatch";
 import {
-  autoTitle,
   createConversationRecord,
   deleteConversationRecord,
   clearConversationRuntime,

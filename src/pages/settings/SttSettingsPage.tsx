@@ -130,7 +130,7 @@ export function SttSettingsPage() {
               onClick={() => {
                 handleBaseUrlChange(preset.baseUrl);
               }}
-              className="flex-1 rounded-xl py-2.5 text-center text-[13px] font-semibold transition-colors active:opacity-70"
+              className="flex-1 rounded-xl py-2.5 text-center font-semibold text-[13px] transition-colors active:opacity-70"
               style={{
                 backgroundColor:
                   baseUrl === preset.baseUrl
@@ -157,7 +157,7 @@ export function SttSettingsPage() {
               className="mr-3 flex-shrink-0"
             />
             <input
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
+              className="flex-1 bg-transparent text-[16px] text-foreground outline-none"
               value={baseUrl}
               onChange={(e) => handleBaseUrlChange(e.target.value)}
               placeholder="https://api.groq.com/openai/v1"
@@ -175,7 +175,7 @@ export function SttSettingsPage() {
             />
             <input
               type={showApiKey ? "text" : "password"}
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
+              className="flex-1 bg-transparent text-[16px] text-foreground outline-none"
               value={apiKey}
               onChange={(e) => handleApiKeyChange(e.target.value)}
               placeholder={t("settings.sttApiKeyPlaceholder")}
@@ -204,8 +204,8 @@ export function SttSettingsPage() {
           >
             <IoCheckmarkCircle size={18} color="var(--success)" className="flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-muted-foreground text-[12px]">{t("settings.currentModel")}</p>
-              <p className="text-foreground truncate text-[15px] font-semibold">
+              <p className="text-[12px] text-muted-foreground">{t("settings.currentModel")}</p>
+              <p className="truncate font-semibold text-[15px] text-foreground">
                 {settings.sttModel}
               </p>
             </div>
@@ -214,7 +214,7 @@ export function SttSettingsPage() {
 
         {/* Connect Button */}
         <button
-          className="mt-1 w-full rounded-xl py-3.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-50"
+          className="mt-1 w-full rounded-xl py-3.5 font-semibold text-[15px] text-white active:opacity-80 disabled:opacity-50"
           disabled={testing || pulling || !baseUrl.trim() || !apiKey.trim()}
           onClick={handleConnect}
           style={{
@@ -241,13 +241,13 @@ export function SttSettingsPage() {
         {(connected || displayModels.length > 0) && fetchedModels.length > 0 && (
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-muted-foreground text-[13px] font-normal tracking-tight uppercase">
+              <span className="font-normal text-[13px] text-muted-foreground uppercase tracking-tight">
                 {t("settings.models")} ({displayModels.length})
               </span>
               <button
                 onClick={handleConnect}
                 disabled={pulling}
-                className="flex items-center gap-1 text-[13px] font-medium active:opacity-60"
+                className="flex items-center gap-1 font-medium text-[13px] active:opacity-60"
                 style={{ color: "var(--primary)" }}
               >
                 <IoRefreshOutline size={14} color="var(--primary)" />
@@ -262,7 +262,7 @@ export function SttSettingsPage() {
               >
                 <IoSearchOutline size={16} color="var(--muted-foreground)" className="mr-2" />
                 <input
-                  className="text-foreground flex-1 bg-transparent text-[14px] outline-none"
+                  className="flex-1 bg-transparent text-[14px] text-foreground outline-none"
                   value={modelSearch}
                   onChange={(e) => setModelSearch(e.target.value)}
                   placeholder={t("providerEdit.searchModels")}
@@ -286,7 +286,7 @@ export function SttSettingsPage() {
                       idx < displayModels.length - 1 ? "0.5px solid var(--border)" : "none",
                   }}
                 >
-                  <span className="text-foreground flex-1 truncate text-left text-[15px]">
+                  <span className="flex-1 truncate text-left text-[15px] text-foreground">
                     {id}
                   </span>
                   {model === id && <IoCheckmarkCircle size={20} color="var(--primary)" />}

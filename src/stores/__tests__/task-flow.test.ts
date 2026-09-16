@@ -210,11 +210,10 @@ describe("discussion tasks", () => {
       });
       expect(task.id).toBe(taskId);
 
-      expect(sendMessage).toHaveBeenCalledWith(
-        expect.stringContaining("Fix the bug"),
-        undefined,
-        { targetParticipantIds: ["executor-1"], taskId },
-      );
+      expect(sendMessage).toHaveBeenCalledWith(expect.stringContaining("Fix the bug"), undefined, {
+        targetParticipantIds: ["executor-1"],
+        taskId,
+      });
       expect(mockNotifyDbChange).toHaveBeenCalledWith("tasks", "conversation-1");
     });
 

@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
-import { Switch } from "../../components/ui/switch";
 import type { Provider, ProviderType } from "../../types";
 import { useProviderStore } from "../../stores/provider-store";
 import { appFetch } from "../../lib/http";
@@ -85,7 +84,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
     return id;
   }, [name, type, baseUrl, apiKey, provider, addProvider, updateProvider]);
 
-  const handleSave = useCallback(async () => {
+  const _handleSave = useCallback(async () => {
     const providerId = await doSave();
     if (providerId) onClose();
   }, [doSave, onClose]);
@@ -121,14 +120,14 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-foreground text-base font-semibold">
+      <h3 className="font-semibold text-base text-foreground">
         {provider ? t("settings.editProvider") : t("settings.addProvider")}
       </h3>
 
       <div className="space-y-3">
         {/* Type */}
         <div>
-          <label className="text-muted-foreground mb-1 block text-xs font-medium">
+          <label className="mb-1 block font-medium text-muted-foreground text-xs">
             {t("providerEdit.type", { defaultValue: "Type" })}
           </label>
           <Select value={type} onValueChange={handleTypeChange}>
@@ -143,7 +142,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
 
         {/* Name */}
         <div>
-          <label className="text-muted-foreground mb-1 block text-xs font-medium">
+          <label className="mb-1 block font-medium text-muted-foreground text-xs">
             {t("providerEdit.name", { defaultValue: "Name" })}
           </label>
           <Input
@@ -156,7 +155,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
 
         {/* Base URL */}
         <div>
-          <label className="text-muted-foreground mb-1 block text-xs font-medium">
+          <label className="mb-1 block font-medium text-muted-foreground text-xs">
             {t("settings.baseUrl")}
           </label>
           <Input
@@ -169,7 +168,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
 
         {/* API Key */}
         <div>
-          <label className="text-muted-foreground mb-1 block text-xs font-medium">
+          <label className="mb-1 block font-medium text-muted-foreground text-xs">
             {t("settings.apiKey")}
           </label>
           <div className="relative">
@@ -183,7 +182,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
             <button
               type="button"
               onClick={() => setShowKey(!showKey)}
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 p-1"
+              className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
             >
               {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
@@ -240,7 +239,7 @@ export function ProviderForm({ provider, onClose }: ProviderFormProps) {
       <Button
         variant="ghost"
         onClick={onClose}
-        className="text-muted-foreground w-full"
+        className="w-full text-muted-foreground"
         disabled={fetchingModels}
       >
         {t("common.cancel")}
