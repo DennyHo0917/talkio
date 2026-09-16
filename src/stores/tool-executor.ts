@@ -34,9 +34,9 @@ async function executeOneTool(
   const description = approvalContext.availableTools.get(name);
   if (!approvalContext.availableTools.has(name)) return { content: `Tool not found: ${name}` };
 
-  const risk = /^(read_|get_|list_|search_|git_status|git_diff|git_log)/.test(name)
+  const risk = /^(read_|get_|list_|search_)/.test(name)
     ? "read"
-    : /^(edit_|write_|delete_|apply_|git_)/.test(name)
+    : /^(edit_|write_|delete_|apply_)/.test(name)
       ? "write"
       : "network";
   const approved = await toolApproval.request({

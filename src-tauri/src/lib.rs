@@ -8,8 +8,6 @@ use tauri_plugin_window_state::{StateFlags, WindowExt};
 #[cfg(not(target_os = "android"))]
 mod mcp_stdio;
 #[cfg(not(target_os = "android"))]
-mod git_cmd;
-#[cfg(not(target_os = "android"))]
 mod secrets;
 #[cfg(not(target_os = "android"))]
 mod tray;
@@ -83,7 +81,6 @@ pub fn run() {
       mcp_stdio::mcp_stdio_send,
       mcp_stdio::mcp_stdio_stop,
       mcp_stdio::mcp_stdio_list,
-      git_cmd::git_execute,
       secrets::secret_set,
       secrets::secret_get,
       secrets::secret_delete,
