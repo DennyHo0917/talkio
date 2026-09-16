@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState, memo } from "react";
+import DOMPurify from "dompurify";
 
 let mermaidCounter = 0;
 let mermaidInstance: any = null;
+
+/** Keep diagram rendering untouched, but neutralize script execution in the
+ *  rendered SVG (mermaid "loose" mode does not sanitize HTML the model put
+ *  into the chart). DOMPurify strips <script>, on* handlers and javascript:
+ *  URLs from the rendered markup while preserving all visual SVG structure. */
+function sanitizeSvg(svg: string): string {
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  });
+}
 
 async function getMermaid() {
   if (mermaidInstance) return mermaidInstance;
@@ -33,7 +44,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({ chart }: MermaidR
         const m = await getMermaid();
         const { svg: rendered } = await m.render(idRef.current, chart.trim());
         if (!cancelled) {
-          setSvg(rendered);
+          setSvg(sanitizeSvg(rendered));
           setError("");
         }
       } catch (err: any) {

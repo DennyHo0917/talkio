@@ -88,23 +88,36 @@ export default function App() {
           const { invoke } = await import("@tauri-apps/api/core");
           const data = await invoke<string | null>("check_pending_import");
           if (data) {
-            let parsed: { version?: string };
+            let parsed: Record<string, unknown>;
             try {
-              parsed = JSON.parse(data) as { version?: string };
+              parsed = JSON.parse(data) as Record<string, unknown>;
             } catch {
               await appAlert(i18n.t("settings.importParseError"));
               return;
             }
-            if (
-              parsed.version === "3.0" &&
-              !(await appConfirm({
-                title: i18n.t("settings.importBackup"),
-                description: i18n.t("settings.restoreConfirm"),
-                confirmText: i18n.t("settings.importBackup"),
-                destructive: true,
-              }))
-            ) {
-              return;
+            if (parsed.version === "2.0" || parsed.version === "3.0") {
+              const mcpCount =
+                Array.isArray(parsed.mcpServers) && parsed.version === "3.0"
+                  ? (parsed.mcpServers as unknown[]).length
+                  : 0;
+              const mcpNotice =
+                mcpCount > 0
+                  ? i18n.t("settings.restoreConfirmMcp", {
+                      count: mcpCount,
+                      defaultValue:
+                        "\n\nThis backup contains {{count}} MCP server configuration(s) which will be connected after import.",
+                    })
+                  : "";
+              if (
+                !(await appConfirm({
+                  title: i18n.t("settings.importBackup"),
+                  description: `${i18n.t("settings.restoreConfirm")}${mcpNotice}`,
+                  confirmText: i18n.t("settings.importBackup"),
+                  destructive: true,
+                }))
+              ) {
+                return;
+              }
             }
             const { importBackupFromString } = await import("./services/backup");
             const result = await importBackupFromString(data);

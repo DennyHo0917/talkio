@@ -115,7 +115,10 @@ export const HtmlPreview = memo(function HtmlPreview({
           (previewEnabled ? (
             <iframe
               srcDoc={wrappedHtml}
-              sandbox="allow-scripts allow-same-origin"
+              // No allow-same-origin: the preview shows AI-generated HTML, so its
+              // scripts must never reach the parent document or Tauri internals.
+              // Scripts still run and can load external CDN resources.
+              sandbox="allow-scripts"
               className="w-full border-0 bg-white"
               style={{ height: 320 }}
               title="HTML Preview"
@@ -172,7 +175,7 @@ export const HtmlPreview = memo(function HtmlPreview({
           </div>
           <iframe
             srcDoc={wrappedHtml}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts"
             className="w-full flex-1 border-0"
             style={{ backgroundColor: "var(--background)" }}
             title="HTML Preview Fullscreen"
