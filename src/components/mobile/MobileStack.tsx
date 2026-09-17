@@ -231,7 +231,7 @@ const IdentityEdit: ActivityComponentType<{ identityId: string }> = ({ params })
 // ══════════════════════════════════════════
 const ProvidersList: ActivityComponentType = () => {
   const { t } = useTranslation();
-  const { push, pop } = _useFlow();
+  const { push } = _useFlow();
   const providers = useProviderStore((s) => s.providers);
   const models = useProviderStore((s) => s.models);
   useEffect(() => {
@@ -255,15 +255,15 @@ const ProvidersList: ActivityComponentType = () => {
       providers
         .filter((p) => p.enabled !== false)
         .map(async (p: { id: string }) => {
-        await updateProvider(p.id, { status: "pending" });
-        try {
-          await fetchModels(p.id);
-          success++;
-        } catch {
-          await updateProvider(p.id, { status: "error", enabled: false });
-          failed++;
-        }
-      }),
+          await updateProvider(p.id, { status: "pending" });
+          try {
+            await fetchModels(p.id);
+            success++;
+          } catch {
+            await updateProvider(p.id, { status: "error" });
+            failed++;
+          }
+        }),
     );
     if (failed === 0) {
       toast.success(t("providers.refreshSuccess", { success }));
@@ -274,7 +274,6 @@ const ProvidersList: ActivityComponentType = () => {
     }
     setRefreshing(false);
   }, [refreshing, providers, fetchModels, updateProvider, t]);
-
 
   return (
     <AppScreen
@@ -350,7 +349,7 @@ const ProvidersList: ActivityComponentType = () => {
                     >
                       <div className="relative flex-shrink-0">
                         <div
-                          className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
+                          className="flex h-10 w-10 items-center justify-center rounded-full font-semibold text-sm text-white"
                           style={{ backgroundColor: getAvatarProps(provider.name).color }}
                         >
                           {getAvatarProps(provider.name).initials}
@@ -369,11 +368,11 @@ const ProvidersList: ActivityComponentType = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-foreground truncate text-[16px] font-medium">
+                          <p className="truncate font-medium text-[16px] text-foreground">
                             {provider.name}
                           </p>
                         </div>
-                        <p className="text-muted-foreground truncate text-[13px]">
+                        <p className="truncate text-[13px] text-muted-foreground">
                           {t("providers.modelsCount", {
                             total: providerModels.length,
                             active: activeModels.length,

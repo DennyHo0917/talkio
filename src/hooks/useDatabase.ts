@@ -2,7 +2,7 @@
  * Reactive data hooks — replaces drizzle useLiveQuery.
  * Uses polling + zustand subscription to keep UI in sync with SQLite.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getAllConversations,
   getConversation,

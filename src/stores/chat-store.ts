@@ -5,12 +5,16 @@
  */
 import { create } from "zustand";
 import type { Message, Conversation, SpeakingOrder, ReasoningEffort } from "../types";
-import { getConversation } from "../storage/database";
+import { MessageStatus } from "../types";
+import {
+  getConversation,
+  insertMessage,
+  updateConversation,
+  updateMessage,
+} from "../storage/database";
 import { type StreamingState } from "./chat-generation";
-import { toolApproval } from "../services/tool-approval";
 import { dispatchMessageGeneration, runAutoDiscuss } from "./chat-dispatch";
 import {
-  autoTitle,
   createConversationRecord,
   deleteConversationRecord,
   clearConversationRuntime,
@@ -33,6 +37,10 @@ import {
   reorderParticipants,
   searchAllMessages,
   togglePinConversation,
+  setConversationArchived,
+  updateMembersAcrossGroups,
+  type BatchMemberChangeResult,
+  type BatchMemberOperation,
   updateGroupSystemPrompt,
   updateParticipantIdentity,
   updateParticipantNickname,
@@ -41,6 +49,13 @@ import {
   toggleParticipantMuted,
   updateSpeakingOrder,
 } from "./chat-store-actions";
+import { createAssistantMessage, createUserMessage } from "./chat-message-builder";
+import { generateId } from "../lib/id";
+import i18n from "../i18n";
+import { generateImages } from "../services/image-generation";
+import { persistGeneratedImages } from "../services/image-store";
+import { notifyDbChange } from "../hooks/useDatabase";
+import { useProviderStore } from "./provider-store";
 
 // Per-conversation generation tracking (module-level to avoid zustand serialization)
 const _abortControllers = new Map<string, AbortController>();
@@ -79,6 +94,7 @@ export interface ChatState {
   deleteAllConversations: () => Promise<void>;
   setCurrentConversation: (id: string | null) => void;
   sendMessage: (text: string, images?: string[], options?: SendMessageOptions) => Promise<void>;
+  generateImage: (prompt: string, modelId: string) => Promise<void>;
   stopGeneration: () => void;
   skipCurrentParticipant: () => void;
   startAutoDiscuss: (rounds: number, topicText?: string) => Promise<void>;
@@ -118,6 +134,12 @@ export interface ChatState {
   removeParticipant: (conversationId: string, participantId: string) => Promise<void>;
   renameConversation: (conversationId: string, title: string) => Promise<void>;
   togglePinConversation: (conversationId: string) => Promise<void>;
+  setConversationArchived: (conversationId: string, archived: boolean) => Promise<void>;
+  updateMembersAcrossGroups: (
+    conversationIds: string[],
+    operation: BatchMemberOperation,
+    members: { modelId: string; identityId: string | null }[],
+  ) => Promise<BatchMemberChangeResult[]>;
   updateSpeakingOrder: (conversationId: string, order: SpeakingOrder) => Promise<void>;
   updateGroupSystemPrompt: (conversationId: string, prompt: string) => Promise<void>;
   reorderParticipants: (conversationId: string, participantIds: string[]) => Promise<void>;
@@ -197,21 +219,115 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  generateImage: async (prompt: string, modelId: string) => {
+    const conversationId = get().currentConversationId;
+    const trimmedPrompt = prompt.trim();
+    if (!conversationId || !trimmedPrompt || get().isGenerating) return;
+
+    const conversation = await getConversation(conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+    if (conversation.type !== "single" || conversation.participants[0]?.modelId !== modelId) {
+      throw new Error("Image generation must use the model selected for this conversation");
+    }
+    const imageModel = useProviderStore.getState().getModelById(modelId);
+    if (!imageModel?.imageGenerationApi || !imageModel.outputModalities.includes("image")) {
+      throw new Error("The selected model does not expose a supported image generation API");
+    }
+
+    const branchId = get().activeBranchId;
+    const userMessage = createUserMessage(
+      generateId(),
+      conversationId,
+      trimmedPrompt,
+      [],
+      branchId,
+    );
+    const assistantMessage = createAssistantMessage(
+      generateId(),
+      conversationId,
+      imageModel.id,
+      imageModel.displayName,
+      conversation.participants[0].id,
+      null,
+      branchId,
+      new Date(Date.parse(userMessage.createdAt) + 1).toISOString(),
+    );
+
+    await insertMessage(userMessage);
+    await insertMessage(assistantMessage);
+    await updateConversation(conversationId, {
+      lastMessage: trimmedPrompt,
+      lastMessageAt: userMessage.createdAt,
+    });
+    notifyDbChange("messages", conversationId);
+    notifyDbChange("conversations");
+
+    const abortController = new AbortController();
+    _abortControllers.set(conversationId, abortController);
+    _streamingMessages.set(assistantMessage.id, {
+      cid: conversationId,
+      messageId: assistantMessage.id,
+      content: "",
+      reasoning: "",
+      images: [],
+    });
+    set({
+      isGenerating: true,
+      streamingMessages: Array.from(_streamingMessages.values()).filter(
+        (state) => state.cid === conversationId,
+      ),
+    });
+
+    try {
+      const images = await persistGeneratedImages(
+        await generateImages({
+          prompt: trimmedPrompt,
+          model: imageModel.id,
+          signal: abortController.signal,
+        }),
+      );
+      await updateMessage(assistantMessage.id, {
+        generatedImages: images,
+        isStreaming: false,
+        status: MessageStatus.SUCCESS,
+        errorMessage: null,
+      });
+    } catch (error) {
+      const aborted = abortController.signal.aborted;
+      const message = error instanceof Error ? error.message : String(error);
+      await updateMessage(assistantMessage.id, {
+        isStreaming: false,
+        status: aborted ? MessageStatus.PAUSED : MessageStatus.ERROR,
+        errorMessage: aborted ? null : message,
+      });
+    } finally {
+      if (_abortControllers.get(conversationId) === abortController) {
+        _abortControllers.delete(conversationId);
+      }
+      _streamingMessages.delete(assistantMessage.id);
+      notifyDbChange("messages", conversationId);
+      if (get().currentConversationId === conversationId) {
+        set({
+          isGenerating: false,
+          streamingMessages: Array.from(_streamingMessages.values()).filter(
+            (state) => state.cid === conversationId,
+          ),
+        });
+      }
+    }
+  },
+
   stopGeneration: () => {
     const conversationId = get().currentConversationId;
     const next = stopConversationGeneration(conversationId, _abortControllers);
     if (conversationId) _participantAbortControllers.delete(conversationId);
     if (next) set(next);
-    // Any tool calls awaiting user approval become moot — reject them so the
-    // generation loop can unwind instead of hanging on a dialog.
-    toolApproval.rejectAll();
   },
 
   skipCurrentParticipant: () => {
     const conversationId = get().currentConversationId;
     if (!skipCurrentParticipant(conversationId, _participantAbortControllers)) return;
     set({ canSkipCurrent: false });
-    if (conversationId) toolApproval.rejectConversation(conversationId);
   },
 
   startAutoDiscuss: async (rounds: number, topicText?: string) => {
@@ -291,7 +407,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       _participantAbortControllers,
       _streamingMessages,
     );
-    toolApproval.rejectConversation(conversationId);
     set({
       ...(runtimeState ?? {}),
       autoDiscussRemaining: 0,
@@ -345,6 +460,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   togglePinConversation: async (conversationId: string) => {
     await togglePinConversation(conversationId);
+  },
+
+  setConversationArchived: async (conversationId: string, archived: boolean) => {
+    await setConversationArchived(conversationId, archived);
+    if (archived && get().currentConversationId === conversationId) {
+      set({ currentConversationId: null, activeBranchId: null, canSkipCurrent: false });
+    }
+  },
+
+  updateMembersAcrossGroups: async (conversationIds, operation, members) => {
+    const blockedIds = new Set(
+      conversationIds.filter(
+        (id) => _abortControllers.has(id) || _participantAbortControllers.has(id),
+      ),
+    );
+    const results = await updateMembersAcrossGroups(
+      conversationIds.filter((id) => !blockedIds.has(id)),
+      operation,
+      members,
+    );
+    for (const conversationId of blockedIds) {
+      const conversation = await getConversation(conversationId);
+      results.push({
+        conversationId,
+        title: conversation?.title ?? conversationId,
+        status: "failed",
+        changedCount: 0,
+        error: i18n.t("batchMembers.generationInProgress"),
+      });
+    }
+    return conversationIds
+      .map((id) => results.find((result) => result.conversationId === id))
+      .filter((result): result is BatchMemberChangeResult => result !== undefined);
   },
 
   updateSpeakingOrder: async (conversationId: string, order) => {

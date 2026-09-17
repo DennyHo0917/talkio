@@ -15,13 +15,13 @@ import {
   Paperclip,
   Gavel,
 } from "lucide-react";
-import type { ConversationParticipant, Model } from "../../types";
+import type { ConversationParticipant } from "../../types";
 import { extractMentionedParticipantIds } from "../../lib/mention-parser";
 import { useProviderStore } from "../../stores/provider-store";
 import { getParticipantLabel, getParticipantLabelParts } from "../../stores/chat-message-builder";
 import { useSettingsStore } from "../../stores/settings-store";
 import { getAvatarProps } from "../../lib/avatar-utils";
-import { appFetch } from "../../lib/http";
+import { transcribeAudio } from "../../services/transcription";
 import { appAlert } from "../../components/shared/ConfirmDialogProvider";
 import {
   parseFile,
@@ -36,6 +36,7 @@ const isMac = navigator.userAgent.toLowerCase().includes("mac");
 
 interface ChatInputProps {
   onSend: (text: string, mentionedParticipantIds?: string[], images?: string[]) => void;
+  imageOnly?: boolean;
   isGenerating: boolean;
   onStop: () => void;
   onSkip?: () => void;
@@ -60,6 +61,7 @@ interface ChatInputProps {
 
 export const ChatInput = memo(function ChatInput({
   onSend,
+  imageOnly = false,
   isGenerating,
   onStop,
   onSkip,
@@ -86,9 +88,10 @@ export const ChatInput = memo(function ChatInput({
   const basePlaceholder = placeholder ?? t("chat.message");
   const sendKey = enterToSend ? "Enter" : isMac ? "⌘Enter" : "Ctrl+Enter";
   const newLineKey = enterToSend ? "Shift+Enter" : "Enter";
+  const modePlaceholder = imageOnly ? t("chat.imagePrompt") : basePlaceholder;
   const resolvedPlaceholder = isMobile
-    ? basePlaceholder
-    : `${basePlaceholder}  (${sendKey} · ${newLineKey} ${t("chat.newLine")})`;
+    ? modePlaceholder
+    : `${modePlaceholder}  (${sendKey} · ${newLineKey} ${t("chat.newLine")})`;
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
@@ -171,6 +174,16 @@ export const ChatInput = memo(function ChatInput({
     const hasImages = attachedImages.length > 0;
     const hasFiles = attachedFiles.length > 0;
     if ((!trimmed && !hasImages && !hasFiles) || isGenerating) return;
+    if (imageOnly) {
+      if (!trimmed) return;
+      onSend(trimmed);
+      setText("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        if (!isMobile) textareaRef.current.focus();
+      }
+      return;
+    }
     let mentionedIds: string[] | undefined;
     if (isGroup) {
       const ids = extractMentionedParticipantIds(trimmed, participantNames);
@@ -212,8 +225,10 @@ export const ChatInput = memo(function ChatInput({
     isGenerating,
     onSend,
     isGroup,
+    isMobile,
     participantNames,
     anyTargetModelSupportsVision,
+    imageOnly,
   ]);
 
   const handleKeyDown = useCallback(
@@ -337,26 +352,13 @@ export const ChatInput = memo(function ChatInput({
           try {
             const { sttBaseUrl, sttApiKey, sttModel } = useSettingsStore.getState().settings;
 
-            const ext = mimeType.includes("webm") ? "webm" : "mp4";
-            const formData = new FormData();
-            formData.append("file", audioBlob, `recording.${ext}`);
-            formData.append("model", sttModel || "whisper-large-v3-turbo");
-
-            const baseUrl = sttBaseUrl.replace(/\/+$/, "");
-            const res = await appFetch(`${baseUrl}/audio/transcriptions`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${sttApiKey}` },
-              body: formData,
+            const transcribedText = await transcribeAudio({
+              audio: audioBlob,
+              baseUrl: sttBaseUrl,
+              apiKey: sttApiKey,
+              modelId: sttModel || "whisper-large-v3-turbo",
               signal: AbortSignal.timeout(30000),
             });
-
-            if (!res.ok) {
-              const errText = await res.text();
-              throw new Error(`Transcription failed: ${res.status} - ${errText}`);
-            }
-
-            const data = await res.json();
-            const transcribedText = data.text ?? "";
             if (transcribedText) {
               setText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
               textareaRef.current?.focus();
@@ -408,6 +410,11 @@ export const ChatInput = memo(function ChatInput({
   // Merge external files from drag-drop in ChatView
   useEffect(() => {
     if (!externalFiles) return;
+    if (imageOnly) {
+      void appAlert(t("chat.imageModelAttachments"));
+      onExternalFilesConsumed?.();
+      return;
+    }
     if (externalFiles.images.length > 0) {
       setAttachedImages((prev) => [...prev, ...externalFiles.images].slice(0, 4));
     }
@@ -415,7 +422,7 @@ export const ChatInput = memo(function ChatInput({
       setAttachedFiles((prev) => [...prev, ...externalFiles.files].slice(0, 4));
     }
     onExternalFilesConsumed?.();
-  }, [externalFiles, onExternalFilesConsumed]);
+  }, [externalFiles, imageOnly, onExternalFilesConsumed, t]);
 
   return (
     <div
@@ -429,7 +436,7 @@ export const ChatInput = memo(function ChatInput({
       {/* Auto-discuss round picker */}
       {showRoundPicker && !isAutoDiscussing && (
         <div className="px-4 py-3">
-          <p className="text-muted-foreground mb-3 text-[13px]">{t("chat.autoDiscussHint")}</p>
+          <p className="mb-3 text-[13px] text-muted-foreground">{t("chat.autoDiscussHint")}</p>
           <div className="flex gap-2.5">
             {[3, 5, 10].map((n) => (
               <button
@@ -451,10 +458,10 @@ export const ChatInput = memo(function ChatInput({
                 className="flex flex-1 flex-col items-center rounded-2xl border py-3 active:opacity-70"
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--secondary)" }}
               >
-                <span className="text-[18px] font-bold" style={{ color: "var(--primary)" }}>
+                <span className="font-bold text-[18px]" style={{ color: "var(--primary)" }}>
                   {n}
                 </span>
-                <span className="text-muted-foreground mt-0.5 text-[11px]">
+                <span className="mt-0.5 text-[11px] text-muted-foreground">
                   {t("chat.autoDiscussRounds", { count: n })}
                 </span>
               </button>
@@ -475,7 +482,7 @@ export const ChatInput = memo(function ChatInput({
             className="relative z-50 px-4 py-3"
             style={{ borderBottom: "0.5px solid var(--border)", backgroundColor: "var(--muted)" }}
           >
-            <p className="text-muted-foreground mb-2 text-[11px] font-bold tracking-widest uppercase">
+            <p className="mb-2 font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
               {t("chat.selectModel")}
             </p>
             {participantEntries.map((entry, idx) => {
@@ -489,18 +496,18 @@ export const ChatInput = memo(function ChatInput({
                   className={`-mx-2 flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left active:opacity-60 ${idx === mentionIndex ? "bg-primary/10" : ""}`}
                 >
                   <div
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg font-semibold text-white text-xs"
                     style={{ backgroundColor: avatarColor }}
                   >
                     {initials}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-foreground block truncate text-[15px] font-medium">
+                    <span className="block truncate font-medium text-[15px] text-foreground">
                       {modelName}
                       {suffix && <span className="text-muted-foreground"> {suffix}</span>}
                     </span>
                     {secondLine && (
-                      <span className="text-muted-foreground block truncate text-[12px]">
+                      <span className="block truncate text-[12px] text-muted-foreground">
                         {secondLine}
                       </span>
                     )}
@@ -524,7 +531,7 @@ export const ChatInput = memo(function ChatInput({
             className="relative z-50 px-4 py-3"
             style={{ borderBottom: "0.5px solid var(--border)", backgroundColor: "var(--muted)" }}
           >
-            <p className="text-muted-foreground mb-2 text-[11px] font-bold tracking-widest uppercase">
+            <p className="mb-2 font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
               {t("chat.summaryPickHost")}
             </p>
             {participantEntries.map((entry) => {
@@ -542,18 +549,18 @@ export const ChatInput = memo(function ChatInput({
                   className="-mx-2 flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left active:opacity-60"
                 >
                   <div
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg font-semibold text-white text-xs"
                     style={{ backgroundColor: avatarColor, opacity: muted ? 0.45 : 1 }}
                   >
                     {initials}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-foreground block truncate text-[15px] font-medium">
+                    <span className="block truncate font-medium text-[15px] text-foreground">
                       {modelName}
                       {suffix && <span className="text-muted-foreground"> {suffix}</span>}
                     </span>
                     {secondLine && (
-                      <span className="text-muted-foreground block truncate text-[12px]">
+                      <span className="block truncate text-[12px] text-muted-foreground">
                         {secondLine}
                         {muted && <span className="ml-1">{t("chat.muted")}</span>}
                       </span>
@@ -580,10 +587,10 @@ export const ChatInput = memo(function ChatInput({
               color="var(--primary)"
               className="flex-shrink-0 animate-pulse"
             />
-            <span className="text-[13px] font-semibold" style={{ color: "var(--primary)" }}>
+            <span className="font-semibold text-[13px]" style={{ color: "var(--primary)" }}>
               {t("chat.autoDiscussRunning")}
             </span>
-            <span className="text-muted-foreground text-[13px]">
+            <span className="text-[13px] text-muted-foreground">
               {t("chat.autoDiscussProgress", {
                 current: autoDiscussTotalRounds - autoDiscussRemaining + 1,
                 total: autoDiscussTotalRounds,
@@ -613,7 +620,7 @@ export const ChatInput = memo(function ChatInput({
                 style={{ backgroundColor: "var(--secondary)", border: "0.5px solid var(--border)" }}
               >
                 <SkipForward size={15} color="var(--primary)" />
-                <span className="text-[14px] font-medium" style={{ color: "var(--primary)" }}>
+                <span className="font-medium text-[14px]" style={{ color: "var(--primary)" }}>
                   {t("chat.skipCurrent")}
                 </span>
               </button>
@@ -624,7 +631,7 @@ export const ChatInput = memo(function ChatInput({
               style={{ backgroundColor: "var(--secondary)", border: "0.5px solid var(--border)" }}
             >
               <Square size={12} color="var(--destructive)" />
-              <span className="text-[14px] font-medium" style={{ color: "var(--destructive)" }}>
+              <span className="font-medium text-[14px]" style={{ color: "var(--destructive)" }}>
                 {t("chat.autoDiscussStop")}
               </span>
             </button>
@@ -663,10 +670,10 @@ export const ChatInput = memo(function ChatInput({
                   style={{ backgroundColor: "var(--muted)", border: "0.5px solid var(--border)" }}
                 >
                   <FileText size={14} color="var(--primary)" className="flex-shrink-0" />
-                  <span className="text-foreground max-w-[120px] truncate text-[12px] font-medium">
+                  <span className="max-w-[120px] truncate font-medium text-[12px] text-foreground">
                     {file.name}
                   </span>
-                  <span className="text-muted-foreground text-[10px]">
+                  <span className="text-[10px] text-muted-foreground">
                     {formatFileSize(file.size)}
                   </span>
                   <button
@@ -694,7 +701,7 @@ export const ChatInput = memo(function ChatInput({
                   className="mr-2 h-2 w-2 animate-pulse rounded-full"
                   style={{ backgroundColor: "var(--destructive)" }}
                 />
-                <span className="text-base font-semibold" style={{ color: "var(--destructive)" }}>
+                <span className="font-semibold text-base" style={{ color: "var(--destructive)" }}>
                   {`${Math.floor(recordingDuration / 60)
                     .toString()
                     .padStart(2, "0")}:${(recordingDuration % 60).toString().padStart(2, "0")}`}
@@ -730,6 +737,7 @@ export const ChatInput = memo(function ChatInput({
                   }}
                   onKeyDown={handleKeyDown}
                   onPaste={(e) => {
+                    if (imageOnly) return;
                     const items = e.clipboardData?.items;
                     if (!items) return;
                     for (const item of items) {
@@ -753,7 +761,7 @@ export const ChatInput = memo(function ChatInput({
                   placeholder={resolvedPlaceholder}
                   disabled={isGenerating}
                   rows={1}
-                  className={`text-foreground placeholder:text-muted-foreground/50 flex-1 resize-none bg-transparent outline-none ${isMobile ? "max-h-24 min-h-[44px] py-2.5 text-[16px]" : "max-h-32 min-h-[36px] py-2 text-[14px]"}`}
+                  className={`flex-1 resize-none bg-transparent text-foreground outline-none placeholder:text-muted-foreground/50 ${isMobile ? "max-h-24 min-h-[44px] py-2.5 text-[16px]" : "max-h-32 min-h-[36px] py-2 text-[14px]"}`}
                 />
                 {isGenerating ? (
                   <div className="ml-1.5 flex flex-shrink-0 items-center gap-1">
@@ -782,13 +790,16 @@ export const ChatInput = memo(function ChatInput({
                   <button
                     onClick={handleSend}
                     disabled={
-                      !text.trim() && attachedImages.length === 0 && attachedFiles.length === 0
+                      imageOnly
+                        ? !text.trim()
+                        : !text.trim() && attachedImages.length === 0 && attachedFiles.length === 0
                     }
                     className="my-1.5 ml-1.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-opacity active:opacity-70"
                     style={{
                       backgroundColor: "var(--primary)",
                       opacity:
-                        text.trim() || attachedImages.length > 0 || attachedFiles.length > 0
+                        text.trim() ||
+                        (!imageOnly && (attachedImages.length > 0 || attachedFiles.length > 0))
                           ? 1
                           : 0.3,
                     }}
@@ -813,7 +824,7 @@ export const ChatInput = memo(function ChatInput({
             <button
               onClick={handleAttach}
               className={`flex items-center justify-center rounded-full active:opacity-60 ${isMobile ? "h-10 w-10" : "h-8 w-8"}`}
-              disabled={isGenerating}
+              disabled={isGenerating || imageOnly}
             >
               {isMobile ? (
                 <Image
@@ -853,7 +864,7 @@ export const ChatInput = memo(function ChatInput({
                   color={isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)"}
                 />
                 <span
-                  className="truncate text-[13px] font-medium"
+                  className="truncate font-medium text-[13px]"
                   style={{
                     color: isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)",
                   }}
@@ -873,7 +884,7 @@ export const ChatInput = memo(function ChatInput({
                   color={isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)"}
                 />
                 <span
-                  className="text-[13px] font-medium"
+                  className="font-medium text-[13px]"
                   style={{
                     color: isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)",
                   }}
@@ -894,7 +905,7 @@ export const ChatInput = memo(function ChatInput({
                   color={isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)"}
                 />
                 <span
-                  className="text-[13px] font-medium"
+                  className="font-medium text-[13px]"
                   style={{
                     color: isGenerating ? "var(--muted-foreground)" : "var(--secondary-foreground)",
                   }}

@@ -1,8 +1,14 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockAppFetch } = vi.hoisted(() => ({ mockAppFetch: vi.fn() }));
+const { mockAppFetch, mockCheckModelHealth } = vi.hoisted(() => ({
+  mockAppFetch: vi.fn(),
+  mockCheckModelHealth: vi.fn(),
+}));
 vi.mock("../../../lib/http", () => ({
   appFetch: mockAppFetch,
+}));
+vi.mock("../../provider-service", () => ({
+  checkModelHealth: mockCheckModelHealth,
 }));
 
 import { checkProviderConnection } from "../connection-check";
@@ -34,6 +40,7 @@ function jsonResponse(status: number, body: unknown): Response {
 describe("checkProviderConnection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckModelHealth.mockResolvedValue({ ok: true });
   });
 
   it("reports all-ok when the endpoint responds with models", async () => {
@@ -52,8 +59,7 @@ describe("checkProviderConnection", () => {
     mockAppFetch
       .mockRejectedValueOnce(new Error("fetch failed")) // endpoint probe
       .mockResolvedValueOnce(jsonResponse(401, { error: "unauthorized" })) // auth
-      .mockResolvedValueOnce(jsonResponse(401, { error: "unauthorized" })) // discovery
-      .mockResolvedValueOnce(jsonResponse(401, { error: "unauthorized" })); // protocol
+      .mockResolvedValueOnce(jsonResponse(401, { error: "unauthorized" })); // discovery
 
     const result = await checkProviderConnection(makeProvider(), "gpt-4o");
 
@@ -74,11 +80,8 @@ describe("checkProviderConnection", () => {
   });
 
   it("does not accept 404 or 500 as valid authentication or protocol", async () => {
-    mockAppFetch
-      .mockResolvedValueOnce(jsonResponse(404, {}))
-      .mockResolvedValueOnce(jsonResponse(404, {}))
-      .mockResolvedValueOnce(jsonResponse(404, {}))
-      .mockResolvedValueOnce(jsonResponse(500, {}));
+    mockAppFetch.mockResolvedValue(jsonResponse(404, {}));
+    mockCheckModelHealth.mockResolvedValue({ ok: false, error: "HTTP 500" });
 
     const result = await checkProviderConnection(makeProvider(), "gpt-4o");
     expect(result.authentication.status).toBe("fail");

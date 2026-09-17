@@ -105,7 +105,7 @@ async function readAsDataUrl(file: File): Promise<string> {
 
 async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  // @ts-ignore — Vite ?url import resolves to a local URL served from same origin (CSP safe)
+  // @ts-expect-error — Vite ?url import resolves to a local URL served from same origin (CSP safe)
   const workerUrl = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
 
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {

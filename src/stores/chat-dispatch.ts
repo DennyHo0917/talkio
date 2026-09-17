@@ -17,7 +17,7 @@ import {
 } from "../storage/database";
 import { notifyDbChange } from "../hooks/useDatabase";
 import { useProviderStore } from "./provider-store";
-import { buildProviderHeaders } from "../services/provider-headers";
+import { buildProviderSessionHeaders } from "../services/provider-headers";
 import { useSettingsStore } from "./settings-store";
 import {
   generateForParticipant,
@@ -61,7 +61,9 @@ export async function preComputeCompression(
   if (tokenCount <= compressionSettings.contextCompressionThreshold) return null;
 
   const baseUrl = firstProvider.baseUrl.replace(/\/+$/, "");
-  const headers = buildProviderHeaders(firstProvider, { "Content-Type": "application/json" });
+  const headers = buildProviderSessionHeaders(firstProvider, cid, {
+    "Content-Type": "application/json",
+  });
   const result = await compressIfNeeded(sampleApiMessages, {
     maxTokens: compressionSettings.contextCompressionThreshold,
     keepRecentCount: 6,
@@ -161,11 +163,7 @@ export async function dispatchMessageGeneration(args: {
       text,
       images ?? [],
       activeBranchId,
-      options?.moderatorSummary
-        ? "summary-request"
-        : options?.taskId
-          ? "task-request"
-          : undefined,
+      options?.moderatorSummary ? "summary-request" : options?.taskId ? "task-request" : undefined,
     );
     await insertMessage(userMsg);
     updateConversation(cid, { lastMessage: text, lastMessageAt: userMsg.createdAt }).catch(
@@ -208,15 +206,16 @@ export async function dispatchMessageGeneration(args: {
 
   const isRetry = !!(options?.reuseUserMessageId && options?.targetParticipantIds?.length);
 
-  const systemPromptAppend = userMsg.kind === "summary-request"
-    ? i18n.t("chat.summaryInstruction")
-    : task
-      ? i18n.t("chat.taskInstruction", {
-          title: task.title,
-          description: task.description,
-          assignee: targets[0] ? getParticipantLabel(targets[0], conversation.participants) : "",
-        })
-      : undefined;
+  const systemPromptAppend =
+    userMsg.kind === "summary-request"
+      ? i18n.t("chat.summaryInstruction")
+      : task
+        ? i18n.t("chat.taskInstruction", {
+            title: task.title,
+            description: task.description,
+            assignee: targets[0] ? getParticipantLabel(targets[0], conversation.participants) : "",
+          })
+        : undefined;
 
   const ctx: GenerationContext = {
     cid,

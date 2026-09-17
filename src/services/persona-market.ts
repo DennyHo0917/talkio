@@ -7,6 +7,7 @@
  */
 
 import { appFetch } from "../lib/http";
+import { z } from "zod";
 
 const CACHE_KEY = "persona_market_cache";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
@@ -39,11 +40,32 @@ interface CacheEntry {
   data: PersonaMarketData;
 }
 
+const personaMarketSchema = z.object({
+  version: z.number().finite(),
+  updatedAt: z.string(),
+  personas: z.array(
+    z.object({
+      name: z.string(),
+      icon: z.string(),
+      category: z.string(),
+      description: z.string(),
+      systemPrompt: z.string(),
+      params: z
+        .object({
+          temperature: z.number().finite().optional(),
+          topP: z.number().finite().optional(),
+        })
+        .optional(),
+    }),
+  ),
+});
+const cacheEntrySchema = z.object({ fetchedAt: z.number().finite(), data: personaMarketSchema });
+
 function readCache(): PersonaMarketData | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
-    const entry: CacheEntry = JSON.parse(raw);
+    const entry = cacheEntrySchema.parse(JSON.parse(raw));
     if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) return null;
     return entry.data;
   } catch {
@@ -63,9 +85,7 @@ function writeCache(data: PersonaMarketData): void {
 async function fetchFromUrl(url: string): Promise<PersonaMarketData> {
   const res = await appFetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data: PersonaMarketData = await res.json();
-  if (!Array.isArray(data.personas)) throw new Error("Invalid format");
-  return data;
+  return personaMarketSchema.parse(await res.json());
 }
 
 /**
@@ -86,9 +106,7 @@ export async function fetchPersonaMarket(): Promise<PersonaMarketData> {
     try {
       const res = await globalThis.fetch("/personas.json");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const local: PersonaMarketData = await res.json();
-      if (!Array.isArray(local.personas)) throw new Error("Invalid format");
-      data = local;
+      data = personaMarketSchema.parse(await res.json());
     } catch {
       data = { version: 0, updatedAt: "", personas: [] };
     }

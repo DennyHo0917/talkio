@@ -6,7 +6,14 @@
  * The frontend persists only `secretRef`-style references, never raw secrets
  * (see src/services/secret-store.ts).
  */
-import type { ApiFormat } from "../../types";
+import type {
+  ApiFormat,
+  ModelInputModality,
+  ModelMetadataMatch,
+  ModelMetadataSource,
+  ModelOutputModality,
+  ReasoningOption,
+} from "../../types";
 
 export type ProviderProtocol = ApiFormat;
 
@@ -66,10 +73,12 @@ export interface ModelDescriptor {
   /** Provider-specific model id sent in requests (e.g. "gpt-4o") */
   modelId: string;
   displayName: string;
-  inputModalities: Array<"text" | "image" | "audio" | "video" | "file">;
-  outputModalities: Array<"text" | "image" | "audio">;
+  inputModalities: ModelInputModality[];
+  outputModalities: ModelOutputModality[];
   contextWindow?: number;
   maxOutputTokens?: number;
+  reasoningOptions?: ReasoningOption[];
+  interleavedReasoningField?: string;
   capabilities?: {
     streaming?: boolean;
     reasoning?: boolean;
@@ -88,4 +97,10 @@ export interface ModelDescriptor {
     google?: Record<string, unknown>;
     openrouter?: Record<string, unknown>;
   };
+}
+
+export interface ResolvedModelDescriptor extends ModelDescriptor {
+  metadataSource: ModelMetadataSource;
+  metadataMatch?: ModelMetadataMatch;
+  metadataProviderId?: string;
 }

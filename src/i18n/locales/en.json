@@ -22,7 +22,10 @@
     "add": "Add",
     "success": "Success",
     "selected": "Selected",
-    "remove": "Remove"
+    "remove": "Remove",
+    "next": "Next",
+    "back": "Back",
+    "processing": "Processing..."
   },
   "tabs": {
     "chats": "Chats",
@@ -43,6 +46,9 @@
     "filterAll": "All",
     "filterSingle": "Single",
     "filterGroups": "Groups",
+    "archived": "Archived",
+    "activeConversations": "Active chats",
+    "noArchived": "No archived conversations",
     "noConversations": "No conversations yet",
     "goToModels": "Go to Models tab to start chatting",
     "startConversation": "Start a conversation",
@@ -51,6 +57,21 @@
     "reasoning": "Reasoning",
     "vision": "Vision",
     "noResults": "No matching conversations"
+  },
+  "batchMembers": {
+    "title": "Manage group members in bulk",
+    "add": "Add members",
+    "remove": "Remove members",
+    "noGroups": "No groups available",
+    "preview": "Preview changes",
+    "previewSummary": "{{groups}} target groups, {{members}} selected members",
+    "addCount": "Add {{count}}",
+    "removeCount": "Remove {{count}}",
+    "updatedCount": "Changed {{count}} members",
+    "noChange": "No change (already present or absent)",
+    "conversationMissing": "Group no longer exists",
+    "notGroup": "Conversation is no longer a group",
+    "generationInProgress": "This group is generating a reply. Stop it before changing members."
   },
   "chat": {
     "you": "You",
@@ -81,7 +102,7 @@
       "rate-limit": "The provider rate limit was reached. Wait and try again.",
       "invalid-request": "The provider rejected the request. Check the model and provider configuration.",
       "api": "The provider service is temporarily unavailable. Try again later.",
-      "tool": "A tool call failed. Review the tool result or approval settings.",
+      "tool": "A tool call failed. Review the tool result.",
       "unknown": "Generation failed due to a connection or provider error."
     },
     "compressContext": "Compress Context",
@@ -112,6 +133,8 @@
     "translate": "Translate",
     "summarize": "Summarize",
     "rename": "Rename",
+    "archiveConversation": "Archive conversation",
+    "restoreConversation": "Restore conversation",
     "addMember": "Add Member",
     "duplicateGroup": "Duplicate Group",
     "selectRole": "Select Role",
@@ -185,7 +208,10 @@
     "create": "Create",
     "muteMember": "Mute",
     "unmuteMember": "Unmute",
-    "generatedImage": "Generated image"
+    "generatedImage": "Generated image",
+    "generatingImage": "Generating image…",
+    "cancelled": "Cancelled",
+    "imageModelAttachments": "The current image model does not support attachments."
   },
   "models": {
     "title": "Models",
@@ -195,7 +221,8 @@
     "selectModels": "Select Models",
     "selectModelsHint": "Pick at least 2 models for a group chat.",
     "createGroup": "Create Group ({{count}})",
-    "manage": "Manage"
+    "manage": "Manage",
+    "imageModel": "Image model"
   },
   "personas": {
     "searchIdentities": "Search personas...",
@@ -245,6 +272,10 @@
     "updateCheckFailed": "Update check failed",
     "imageNotConfigured": "Not configured",
     "imageHint": "Configure an OpenAI-compatible /images/generations endpoint to let models draw through the generate_image tool.",
+    "defaultImageModel": "Default image model",
+    "imageModelsCount": "{{count}} available",
+    "addImageModel": "Add image model",
+    "imageModelProvider": "Image model provider",
     "sttNotConfigured": "Not configured",
     "currentModel": "Current Model",
     "sttPresets": "Quick Setup",
@@ -307,10 +338,7 @@
     "compressionThreshold": "Threshold",
     "workspaceDir": "Workspace Directory",
     "selectDir": "Select",
-    "changeDir": "Change",
-    "toolApproval": "Tool approval",
-    "toolApprovalAuto": "Run automatically",
-    "toolApprovalAsk": "Ask every time"
+    "changeDir": "Change"
   },
   "providerEdit": {
     "quickSelect": "Quick Select",
@@ -339,6 +367,7 @@
     "tools": "Tools",
     "reasoning": "Reasoning",
     "probe": "Probe",
+    "probeFailed": "Model capability probe failed",
     "type": "Type",
     "enabled": "Enabled",
     "customHeaders": "Custom Headers",
@@ -371,7 +400,17 @@
     "reasoningEffort_low": "Low",
     "reasoningEffort_medium": "Medium",
     "reasoningEffort_high": "High",
-    "reasoningEffort_xhigh": "XHigh"
+    "reasoningEffort_xhigh": "XHigh",
+    "reasoningEffort_max": "Max",
+    "contextWindow": "Context {{value}}",
+    "maxOutputTokens": "Max output {{value}}",
+    "reasoningLevels": "Reasoning {{value}}",
+    "reasoningBudget": "Budget {{value}} tokens",
+    "metadataSource_manual": "Manual",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "Provider API",
+    "metadataSource_probe": "Live probe",
+    "metadataSource_default": "Default"
   },
   "providers": {
     "deleteProvider": "Delete Provider",
@@ -525,12 +564,6 @@
       "name": "Professor Nonsense",
       "prompt": "You are an overly confident professor who makes up completely absurd facts and delivers them with absolute authority. Cite fake studies, invent statistics, and reference imaginary experts. Sound extremely academic and serious while saying things that are hilariously wrong. Never break character or admit you're making things up."
     }
-  },
-  "toolApproval": {
-    "title": "Tool approval required",
-    "description": "The AI wants to run a tool. Review the request and decide.",
-    "approve": "Approve",
-    "reject": "Reject"
   },
   "tray": {
     "show": "Show Window",

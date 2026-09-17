@@ -43,7 +43,19 @@ export interface ModelCapabilities {
   streaming: boolean;
 }
 
-export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ModelInputModality = "text" | "image" | "audio" | "video" | "file";
+export type ModelOutputModality = "text" | "image" | "audio";
+export type ImageGenerationApi = "openai" | "openai-compatible" | "google";
+
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ReasoningOption =
+  | { type: "toggle" }
+  | { type: "effort"; values: Array<ReasoningEffort | "default"> }
+  | { type: "budget_tokens"; min?: number; max?: number };
+
+export type ModelMetadataSource = "manual" | "models.dev" | "provider" | "probe" | "default";
+export type ModelMetadataMatch = "exact" | "normalized";
 
 export const REASONING_EFFORT_LEVELS: readonly (ReasoningEffort | undefined)[] = [
   undefined,
@@ -53,13 +65,20 @@ export const REASONING_EFFORT_LEVELS: readonly (ReasoningEffort | undefined)[] =
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 export function nextReasoningEffort(
   current: ReasoningEffort | undefined,
+  supportedLevels: readonly (ReasoningEffort | undefined)[] = REASONING_EFFORT_LEVELS,
 ): ReasoningEffort | undefined {
-  const idx = REASONING_EFFORT_LEVELS.indexOf(current);
-  return REASONING_EFFORT_LEVELS[(idx + 1) % REASONING_EFFORT_LEVELS.length];
+  const levels = supportedLevels.length > 0 ? supportedLevels : [undefined];
+  const idx = levels.indexOf(current);
+  return levels[(idx + 1) % levels.length];
+}
+
+export function reasoningEffortLabel(value: ReasoningEffort | undefined): string {
+  return value ?? "default";
 }
 
 export interface Model {
@@ -69,9 +88,35 @@ export interface Model {
   displayName: string;
   avatar: string | null;
   capabilities: ModelCapabilities;
+  /** Capability fields confirmed by live probes; overrides catalog values field by field. */
+  probedCapabilities?: Partial<ModelCapabilities>;
+  inputModalities: ModelInputModality[];
+  outputModalities: ModelOutputModality[];
+  /** Independent image generation API exposed through an AI SDK ImageModel. */
+  imageGenerationApi?: ImageGenerationApi;
   capabilitiesVerified: boolean;
   maxContextLength: number;
+  maxOutputTokens?: number;
+  reasoningOptions?: ReasoningOption[];
+  metadataSource?: ModelMetadataSource;
+  metadataMatch?: ModelMetadataMatch;
+  metadataProviderId?: string;
   enabled: boolean;
+}
+
+export function getSupportedReasoningEfforts(
+  model: Model | null | undefined,
+): readonly (ReasoningEffort | undefined)[] {
+  if (!model?.capabilities.reasoning) return [undefined];
+  const effortOption = model.reasoningOptions?.find((option) => option.type === "effort");
+  if (!effortOption || effortOption.type !== "effort") return [undefined];
+
+  const levels: Array<ReasoningEffort | undefined> = [undefined];
+  for (const value of effortOption.values) {
+    const level = value === "default" ? undefined : value;
+    if (!levels.includes(level)) levels.push(level);
+  }
+  return levels;
 }
 
 export interface IdentityParams {
@@ -164,6 +209,7 @@ export interface Conversation {
   lastMessage: string | null;
   lastMessageAt: string | null;
   pinned: boolean;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
   /** Per-conversation workspace directory for AI file I/O (desktop only) */
@@ -269,63 +315,4 @@ export interface Task {
   resultMessageId: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface ChatApiToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-}
-
-export interface ChatApiMessage {
-  role: MessageRole;
-  content: string | ChatApiContentPart[];
-  name?: string;
-  tool_calls?: ChatApiToolCall[];
-  tool_call_id?: string;
-}
-
-export type ChatApiContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
-
-export interface ChatApiRequest {
-  model: string;
-  messages: ChatApiMessage[];
-  stream: boolean;
-  temperature?: number;
-  max_tokens?: number;
-  tools?: ChatApiToolDef[];
-  [key: string]: unknown;
-}
-
-export interface ChatApiToolDef {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
-export interface ChatApiChoice {
-  index: number;
-  message: {
-    role: string;
-    content: string | null;
-    reasoning_content?: string | null;
-    tool_calls?: Array<{
-      id: string;
-      type: "function";
-      function: { name: string; arguments: string };
-    }>;
-  };
-  finish_reason: string;
-}
-
-export interface ChatApiResponse {
-  id: string;
-  choices: ChatApiChoice[];
-  model: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }

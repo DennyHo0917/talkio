@@ -1,7 +1,7 @@
 {
   "name": "talkio-web",
   "private": true,
-  "version": "2.15.0",
+  "version": "2.16.0",
   "type": "module",
   "scripts": {
     "validate:json": "node scripts/validate-json.js",
@@ -9,16 +9,24 @@
     "build": "node scripts/validate-json.js && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check . && tsc --noEmit",
+    "check:fix": "biome check --write .",
+    "sync:model-catalog": "node scripts/sync-models-dev.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:live-providers": "vitest run src/services/runtime/__tests__/provider-live.test.ts"
+    "test:live-providers": "vitest run src/services/runtime/ai-sdk/__tests__/ai-sdk-e2e.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.30",
     "@ai-sdk/google": "^4.0.34",
+    "@ai-sdk/groq": "^4.0.34",
     "@ai-sdk/openai": "^4.0.30",
+    "@ai-sdk/openai-compatible": "^3.0.40",
+    "@ai-sdk/provider": "^4.0.8",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -49,19 +57,22 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "date-fns": "^4.1.0",
+    "diff-match-patch": "^1.0.5",
+    "dompurify": "^3.4.14",
     "framer-motion": "^12.12.2",
+    "gpt-tokenizer": "^4.0.0",
     "i18next": "^25.2.1",
+    "ignore": "^7.0.8",
     "katex": "^0.16.22",
     "lucide-react": "^0.575.0",
     "mammoth": "^1.11.0",
+    "marked": "^18.0.11",
     "mermaid": "^11.16.1",
     "nanoid": "^5.1.16",
     "pdfjs-dist": "^5.4.530",
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-hook-form": "^7.56.4",
     "react-hotkeys-hook": "^5.2.4",
     "react-i18next": "^16.0.0",
     "react-markdown": "^10.1.0",
@@ -71,20 +82,24 @@
     "remark-math": "^6.0.0",
     "shiki": "^4.0.0",
     "sonner": "^2.0.3",
+    "sql.js": "^1.14.2",
     "tailwind-merge": "^3.5.0",
     "use-stick-to-bottom": "^1.1.3",
+    "zod": "^4.5.4",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.1.7",
     "@tauri-apps/cli": "^2.6.2",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/dompurify": "^3.2.0",
     "@types/katex": "^0.16.7",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^4.4.1",
-    "prettier": "^3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2",
     "shadcn": "^3.8.5",
     "sharp": "0.35.3",
     "tailwindcss": "^4.1.7",
@@ -95,5 +110,10 @@
   },
   "overrides": {
     "@hono/node-server": "2.1.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "nanoid@<3.3.18": "3.3.18"
+    }
   }
 }

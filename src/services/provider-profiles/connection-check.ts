@@ -1,11 +1,8 @@
 import type { Provider } from "../../types";
 import { appFetch } from "../../lib/http";
 import { buildProviderHeaders } from "../provider-headers";
-import {
-  appendResourcePath,
-  isAzureOpenAIProvider,
-  resolveProviderResourceUrl,
-} from "../provider-request";
+import { resolveProviderResourceUrl } from "../provider-request";
+import { checkModelHealth } from "../provider-service";
 import { getProfile } from "./registry";
 import type { CheckResult, ConnectionCheck, ModelDiscoveryConfig } from "./types";
 
@@ -112,51 +109,10 @@ export async function checkProviderConnection(
 
   const protocolCompatibility: CheckResult = await (async () => {
     if (!selectedModelId) return skipped("No model selected");
-    try {
-      let url: string;
-      let body: Record<string, unknown>;
-      if (provider.apiFormat === "gemini-generate-content") {
-        url = `${provider.baseUrl.replace(/\/+$/, "")}/models/${encodeURIComponent(selectedModelId)}:generateContent`;
-        body = { contents: [{ role: "user", parts: [{ text: "hi" }] }] };
-      } else if (provider.apiFormat === "anthropic-messages") {
-        url = resolveProviderResourceUrl(provider, "/v1/messages");
-        body = {
-          model: selectedModelId,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "hi" }],
-        };
-      } else {
-        const baseUrl = isAzureOpenAIProvider(provider)
-          ? `${provider.baseUrl.replace(/\/+$/, "")}/deployments/${encodeURIComponent(selectedModelId)}?api-version=${encodeURIComponent(provider.apiVersion ?? "2024-10-21")}`
-          : provider.baseUrl.replace(/\/+$/, "");
-        url = appendResourcePath(
-          baseUrl,
-          provider.apiFormat === "responses" ? "/responses" : "/chat/completions",
-        );
-        body =
-          provider.apiFormat === "responses"
-            ? { model: selectedModelId, input: "hi", max_output_tokens: 1 }
-            : {
-                model: selectedModelId,
-                messages: [{ role: "user", content: "hi" }],
-                max_tokens: 1,
-              };
-      }
-
-      const res = await appFetch(url, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (res.ok) return ok(`Protocol accepted request (HTTP ${res.status})`);
-      if (res.status === 400 || res.status === 422) {
-        return ok(`Protocol recognized request (HTTP ${res.status})`);
-      }
-      return fail(`Protocol check failed (HTTP ${res.status})`);
-    } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
-    }
+    const result = await checkModelHealth(provider, selectedModelId);
+    return result.ok
+      ? ok("Protocol accepted request")
+      : fail(result.error ?? "Protocol check failed");
   })();
 
   return { endpoint, authentication, modelDiscovery, selectedModelAccess, protocolCompatibility };

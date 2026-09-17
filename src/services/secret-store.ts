@@ -9,6 +9,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { isAndroid, isDesktop } from "../lib/platform";
+import { z } from "zod";
 
 const LEGACY_LOCAL_PREFIX = "talkio:secret:";
 
@@ -20,11 +21,11 @@ function deleteLegacyLocalSecret(account: string): void {
   }
 }
 
-interface NativeSecretResponse {
-  ok: boolean;
-  value?: string | null;
-  error?: string;
-}
+const nativeSecretResponseSchema = z.object({
+  ok: z.boolean(),
+  value: z.string().nullable().optional(),
+  error: z.string().optional(),
+});
 
 function callAndroidSecretStore(
   operation: "set" | "get" | "delete",
@@ -34,7 +35,7 @@ function callAndroidSecretStore(
   const bridge = window.TalkioSecretStore;
   if (!bridge) throw new Error("Android secret store is unavailable");
   const raw = operation === "set" ? bridge.set(account, secret ?? "") : bridge[operation](account);
-  const response = JSON.parse(raw) as NativeSecretResponse;
+  const response = nativeSecretResponseSchema.parse(JSON.parse(raw));
   if (!response.ok) throw new Error(response.error || "Android secret store failed");
   return response.value ?? undefined;
 }

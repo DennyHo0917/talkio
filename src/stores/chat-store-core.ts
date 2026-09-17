@@ -55,6 +55,7 @@ export async function createConversationRecord(
     lastMessage: null,
     lastMessageAt: null,
     pinned: false,
+    archived: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

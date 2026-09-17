@@ -4,9 +4,14 @@
 //! using the JSON-RPC protocol (one JSON message per line).
 //!
 //! Uses async mpsc channels (not polling) for efficient response handling.
+//!
+//! On Windows the command line is passed to `cmd.exe` as a single `/S /C`
+//! string with every token double-quoted, so `& | < > ^` inside arguments
+//! are inert (cmd still expands `%VAR%`, which we reject).
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::State;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -23,6 +28,103 @@ pub struct StdioSession {
     stdout_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<String>>>,
 }
 
+/// Quote one token for `cmd.exe /C`. Returns None for tokens that cannot be
+/// passed safely: `"` cannot be nested and `%VAR%` still expands (we only
+/// reject actual env-var patterns, so `%20`-style URL encoding stays usable).
+#[cfg(target_os = "windows")]
+fn quote_cmd_token(token: &str) -> Option<String> {
+    if token.contains('"') || has_cmd_env_expansion(token) {
+        return None;
+    }
+    Some(format!("\"{}\"", token))
+}
+
+/// Detect `%VAR%`-style environment expansion patterns in a token. cmd.exe
+/// expands these even inside double quotes; lone percent signs (`%20`,
+/// `100%`) are left literal. Cross-platform so the logic gets tested on CI
+/// (used by the Windows command builder + unit tests).
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn has_cmd_env_expansion(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let mut j = i + 1;
+            if j < bytes.len() && (bytes[j].is_ascii_alphabetic() || bytes[j] == b'_') {
+                while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                    j += 1;
+                }
+                if j < bytes.len() && bytes[j] == b'%' {
+                    return true;
+                }
+            }
+            i = j.max(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Build the full `cmd.exe /D /S /C` command line. Every token is
+/// double-quoted; the doubled outer quotes are consumed by `/S`, leaving the
+/// per-token quotes intact so `& | < > ^` inside arguments are never
+/// re-parsed as command syntax. This mirrors the battle-tested Node.js
+/// shell:true quoting.
+#[cfg(target_os = "windows")]
+fn build_cmd_line(command: &str, args: &[String]) -> Option<String> {
+    let mut tokens = vec![quote_cmd_token(command)?];
+    for arg in args {
+        tokens.push(quote_cmd_token(arg)?);
+    }
+    Some(format!("\"{}\"", tokens.join(" ")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmd_env_expansion_detection() {
+        assert!(has_cmd_env_expansion("%PATH%"));
+        assert!(has_cmd_env_expansion("a%TOKEN%"));
+        assert!(has_cmd_env_expansion("%MY_VAR_1%"));
+        assert!(!has_cmd_env_expansion("%20"));
+        assert!(!has_cmd_env_expansion("100%"));
+        assert!(!has_cmd_env_expansion("100% off"));
+        assert!(!has_cmd_env_expansion("plain string"));
+        assert!(!has_cmd_env_expansion("http://x/%2F/path"));
+        assert!(!has_cmd_env_expansion(""));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn cmd_line_quotes_every_token() {
+        assert_eq!(quote_cmd_token("npx").as_deref(), Some("\"npx\""));
+        assert_eq!(
+            quote_cmd_token("http://x?a=1&b=2").as_deref(),
+            Some("\"http://x?a=1&b=2\"")
+        );
+        assert!(quote_cmd_token("a\"b").is_none());
+        assert!(quote_cmd_token("%PATH%").is_none());
+
+        let line = build_cmd_line(
+            "npx",
+            &[
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+                "http://x?a=1&b=2".to_string(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            line,
+            "\"\"npx\" \"-y\" \"@modelcontextprotocol/server-filesystem\" \"http://x?a=1&b=2\"\""
+        );
+        assert!(build_cmd_line("cmd", &["a\"b".to_string()]).is_none());
+    }
+}
+
 /// Start a new MCP stdio subprocess.
 /// Returns a session_id that the frontend uses for subsequent calls.
 #[tauri::command]
@@ -30,18 +132,32 @@ pub async fn mcp_stdio_start(
     command: String,
     args: Vec<String>,
     env: HashMap<String, String>,
-    sessions: tauri::State<'_, Sessions>,
+    sessions: State<'_, Sessions>,
 ) -> Result<String, String> {
+    let command = command.trim().to_string();
+    if command.is_empty() {
+        return Err("MCP stdio command must not be empty".to_string());
+    }
+    if command.chars().any(char::is_control) || args.iter().any(|a| a.chars().any(char::is_control))
+    {
+        return Err("MCP stdio command/args must not contain control characters".to_string());
+    }
+
     let session_id = Uuid::new_v4().to_string();
 
     // On Windows, commands like "npx" are actually "npx.cmd" — Command::new
-    // doesn't resolve .cmd/.bat extensions. Wrap with cmd.exe /C to fix this.
+    // doesn't resolve .cmd/.bat extensions. Wrap with cmd.exe /C (quoted so
+    // argument metacharacters stay inert — see build_cmd_line).
     #[cfg(target_os = "windows")]
     let mut cmd = {
+        let line = build_cmd_line(&command, &args).ok_or_else(|| {
+            format!(
+                "MCP server '{}' has arguments that cannot be passed safely on Windows (quotes or %VAR% patterns)",
+                command
+            )
+        })?;
         let mut c = Command::new("cmd.exe");
-        c.arg("/C");
-        c.arg(&command);
-        c.args(&args);
+        c.arg("/D").arg("/S").arg("/C").arg(line);
         c
     };
     #[cfg(not(target_os = "windows"))]
@@ -105,19 +221,25 @@ pub async fn mcp_stdio_start(
     cmd.stdin(std::process::Stdio::piped());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
+    // The child must not outlive its session handle (killed when the session
+    // is dropped or explicitly stopped).
+    cmd.kill_on_drop(true);
     // Prevent console window from flashing on Windows
     #[cfg(target_os = "windows")]
     {
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    log::info!("[MCP stdio] Spawning: {} {:?}", command, args);
-    log::debug!("[MCP stdio] env={:?}", env);
+    // Do NOT log args/env verbatim: they routinely contain tokens and keys.
+    log::info!("[MCP stdio] Spawning: {} ({} args)", command, args.len());
     let mut child = cmd.spawn().map_err(|e| {
         log::error!("[MCP stdio] Spawn failed: {}", e);
         format!("Failed to spawn MCP process '{}': {}", command, e)
     })?;
-    log::info!("[MCP stdio] Process spawned successfully, pid={:?}", child.id());
+    log::info!(
+        "[MCP stdio] Process spawned successfully, pid={:?}",
+        child.id()
+    );
 
     let child_stdin = child.stdin.take().ok_or("Failed to get child stdin")?;
     let child_stdout = child.stdout.take().ok_or("Failed to get child stdout")?;
@@ -132,9 +254,15 @@ pub async fn mcp_stdio_start(
     let mut writer = child_stdin;
     tokio::spawn(async move {
         while let Some(msg) = stdin_rx.recv().await {
-            if writer.write_all(msg.as_bytes()).await.is_err() { break; }
-            if writer.write_all(b"\n").await.is_err() { break; }
-            if writer.flush().await.is_err() { break; }
+            if writer.write_all(msg.as_bytes()).await.is_err() {
+                break;
+            }
+            if writer.write_all(b"\n").await.is_err() {
+                break;
+            }
+            if writer.flush().await.is_err() {
+                break;
+            }
         }
     });
 
@@ -143,19 +271,20 @@ pub async fn mcp_stdio_start(
         let reader = BufReader::new(child_stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            if !line.trim().is_empty() {
-                if stdout_tx.send(line).await.is_err() { break; }
+            if !line.trim().is_empty() && stdout_tx.send(line).await.is_err() {
+                break;
             }
         }
     });
 
-    // Task: log stderr
+    // Task: log stderr (debug level: server stderr is chatty and may carry
+    // secrets; it is surfaced to the user via the tools UI when needed)
     let sid_for_log = session_id.clone();
     tokio::spawn(async move {
         let reader = BufReader::new(child_stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            log::warn!("[MCP stdio {}] stderr: {}", sid_for_log, line);
+            log::debug!("[MCP stdio {}] stderr: {}", sid_for_log, line);
         }
     });
 
@@ -165,7 +294,11 @@ pub async fn mcp_stdio_start(
         stdout_rx: Arc::new(Mutex::new(stdout_rx)),
     };
     sessions.lock().await.insert(session_id.clone(), session);
-    log::info!("[MCP stdio] Started session {} (cmd: {} {:?})", session_id, command, args);
+    log::info!(
+        "[MCP stdio] Started session {} (cmd: {})",
+        session_id,
+        command
+    );
 
     Ok(session_id)
 }
@@ -197,19 +330,13 @@ pub async fn mcp_stdio_send(
         log::debug!("[MCP stdio {}] Drained buffered line", session_id);
     }
 
-    stdin_tx
-        .send(message)
-        .await
-        .map_err(|e| {
-            log::error!("[MCP stdio {}] stdin send failed: {}", session_id, e);
-            format!("Failed to send message: {}", e)
-        })?;
+    stdin_tx.send(message).await.map_err(|e| {
+        log::error!("[MCP stdio {}] stdin send failed: {}", session_id, e);
+        format!("Failed to send message: {}", e)
+    })?;
 
     // Wait for response on the channel (no polling, no memory leak)
-    match tokio::time::timeout(
-        tokio::time::Duration::from_secs(60),
-        rx.recv(),
-    ).await {
+    match tokio::time::timeout(tokio::time::Duration::from_secs(60), rx.recv()).await {
         Ok(Some(line)) => Ok(line),
         Ok(None) => {
             log::error!("[MCP stdio {}] Process closed", session_id);
@@ -238,9 +365,7 @@ pub async fn mcp_stdio_stop(
 
 /// List all active stdio sessions (for debugging).
 #[tauri::command]
-pub async fn mcp_stdio_list(
-    sessions: tauri::State<'_, Sessions>,
-) -> Result<Vec<String>, String> {
+pub async fn mcp_stdio_list(sessions: tauri::State<'_, Sessions>) -> Result<Vec<String>, String> {
     let guard = sessions.lock().await;
     Ok(guard.keys().cloned().collect())
 }

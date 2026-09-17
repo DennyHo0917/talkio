@@ -50,19 +50,19 @@ function PersonaCard({
       {/* Avatar + name + category */}
       <div className="flex items-center gap-3">
         <div
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-semibold text-sm text-white"
           style={{ backgroundColor: color }}
         >
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-foreground truncate text-[15px] font-semibold">{persona.name}</p>
-          <p className="text-muted-foreground text-[12px]">{persona.description}</p>
+          <p className="truncate font-semibold text-[15px] text-foreground">{persona.name}</p>
+          <p className="text-[12px] text-muted-foreground">{persona.description}</p>
         </div>
       </div>
 
       {/* System prompt preview */}
-      <p className="text-muted-foreground line-clamp-2 text-[13px] leading-relaxed">
+      <p className="line-clamp-2 text-[13px] text-muted-foreground leading-relaxed">
         {persona.systemPrompt}
       </p>
 
@@ -70,7 +70,7 @@ function PersonaCard({
       <button
         onClick={onImport}
         disabled={imported}
-        className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-[13px] font-medium transition-opacity active:opacity-60 disabled:opacity-50"
+        className="flex items-center justify-center gap-1.5 rounded-xl py-2 font-medium text-[13px] transition-opacity active:opacity-60 disabled:opacity-50"
         style={{
           backgroundColor: imported
             ? "color-mix(in srgb, var(--primary) 8%, transparent)"
@@ -167,7 +167,7 @@ export function PersonaMarketPage({ onClose }: { onClose: () => void }) {
         >
           <IoChevronBack size={22} color="var(--primary)" />
         </button>
-        <h1 className="text-foreground flex-1 text-[20px] font-bold tracking-tight">{title}</h1>
+        <h1 className="flex-1 font-bold text-[20px] text-foreground tracking-tight">{title}</h1>
         <button
           onClick={() => load(true)}
           disabled={loading}
@@ -185,7 +185,7 @@ export function PersonaMarketPage({ onClose }: { onClose: () => void }) {
             <button
               key={cat.key}
               onClick={() => setActiveCategory(cat.key)}
-              className="flex-shrink-0 rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors active:opacity-70"
+              className="flex-shrink-0 rounded-full px-3 py-1.5 font-medium text-[13px] transition-colors active:opacity-70"
               style={{
                 backgroundColor: activeCategory === cat.key ? "var(--primary)" : "var(--secondary)",
                 color: activeCategory === cat.key ? "white" : "var(--foreground)",
@@ -211,11 +211,11 @@ export function PersonaMarketPage({ onClose }: { onClose: () => void }) {
             onClick={() => load(true)}
             className="mt-8 flex w-full flex-col items-center gap-2 py-4 active:opacity-60"
           >
-            <p className="text-muted-foreground text-[14px]">{errorLabel}</p>
+            <p className="text-[14px] text-muted-foreground">{errorLabel}</p>
           </button>
         ) : filtered.length === 0 ? (
           <div className="flex h-40 items-center justify-center">
-            <p className="text-muted-foreground text-[14px]">{emptyLabel}</p>
+            <p className="text-[14px] text-muted-foreground">{emptyLabel}</p>
           </div>
         ) : (
           <AnimatePresence mode="wait">

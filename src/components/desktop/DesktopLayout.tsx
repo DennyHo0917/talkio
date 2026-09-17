@@ -14,10 +14,14 @@ import {
   Users,
   Pencil,
   Pin,
+  Archive,
+  ArchiveRestore,
+  UserRoundCog,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ModelPicker } from "../shared/ModelPicker";
 import { AddMemberPicker, type SelectedMember } from "../shared/AddMemberPicker";
+import { BatchGroupMembersDialog } from "../shared/BatchGroupMembersDialog";
 import { SettingsPage } from "../../pages/settings/SettingsPage";
 import { DiscoverPage } from "../../pages/DiscoverPage";
 import { ModelsPage } from "../../pages/settings/ModelsPage";
@@ -38,9 +42,8 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import type { Conversation, ConversationParticipant } from "../../types";
+import type { Conversation } from "../../types";
 import { getAvatarProps } from "../../lib/avatar-utils";
-import { useConfirm } from "../shared/ConfirmDialogProvider";
 import { DesktopChatPanel } from "./DesktopChatPanel";
 
 type DesktopSection = "chats" | "experts" | "discover" | "settings";
@@ -118,7 +121,7 @@ export function DesktopLayout() {
   return (
     <div className="flex h-full">
       {/* Icon Navigation Bar (WeChat-style) */}
-      <div className="bg-sidebar border-sidebar-border flex w-14 flex-shrink-0 flex-col items-center gap-1 border-r py-4">
+      <div className="flex w-14 flex-shrink-0 flex-col items-center gap-1 border-sidebar-border border-r bg-sidebar py-4">
         {[
           { id: "chats" as DesktopSection, icon: MessagesSquare, label: t("tabs.chats") },
           { id: "experts" as DesktopSection, icon: Box, label: t("tabs.models") },
@@ -167,21 +170,21 @@ export function DesktopLayout() {
       {/* Middle Panel — only shown for chats section */}
       {activeSection === "chats" && (
         <div
-          className="bg-sidebar border-sidebar-border relative flex-shrink-0 overflow-y-auto border-r"
+          className="relative flex-shrink-0 overflow-y-auto border-sidebar-border border-r bg-sidebar"
           style={{ width: sidebarWidth }}
         >
           <DesktopConversationList />
 
           {/* Resize handle */}
           <div
-            className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors"
+            className="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-primary/20 active:bg-primary/30"
             onMouseDown={handleResizeStart}
           />
         </div>
       )}
 
       {/* Main Content Area */}
-      <div className="bg-background min-w-0 flex-1">
+      <div className="min-w-0 flex-1 bg-background">
         {activeSection === "settings" ? (
           <SettingsPage
             initialProviderEditId={settingsProviderEditId ?? undefined}
@@ -204,7 +207,7 @@ export function DesktopLayout() {
         ) : activeSection === "chats" && currentConversationId ? (
           <DesktopChatPanel conversationId={currentConversationId} />
         ) : (
-          <DesktopEmptyState section={activeSection} />
+          <DesktopEmptyState />
         )}
       </div>
 
@@ -232,22 +235,28 @@ function DesktopConversationList() {
   const clearConversationMessages = useChatStore((s) => s.clearConversationMessages);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const togglePinConversation = useChatStore((s) => s.togglePinConversation);
+  const setConversationArchived = useChatStore((s) => s.setConversationArchived);
   const models = useProviderStore((s) => s.models);
   const providers = useProviderStore((s) => s.providers);
   const getEnabledModels = useProviderStore((s) => s.getEnabledModels);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [showBatchMembers, setShowBatchMembers] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [animateRef] = useAutoAnimate();
 
   const enabledModels = useMemo(() => getEnabledModels(), [models, providers]);
 
   const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
+    const byArchive = conversations.filter((conversation) =>
+      showArchived ? conversation.archived : !conversation.archived,
+    );
+    if (!searchQuery.trim()) return byArchive;
     const q = searchQuery.toLowerCase();
-    return conversations.filter(
+    return byArchive.filter(
       (c) => c.title.toLowerCase().includes(q) || (c.lastMessage ?? "").toLowerCase().includes(q),
     );
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, showArchived]);
 
   const handleNew = useCallback(async () => {
     if (enabledModels.length === 0) {
@@ -274,28 +283,69 @@ function DesktopConversationList() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-sidebar-border flex flex-shrink-0 items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sidebar-foreground text-sm font-semibold">{t("tabs.chats")}</h2>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-md"
-              data-new-chat
-              onClick={handleNew}
-            >
-              <Plus size={16} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("chats.startConversation")}</TooltipContent>
-        </Tooltip>
+      <div className="flex flex-shrink-0 items-center justify-between border-sidebar-border border-b px-4 py-3">
+        <h2 className="font-semibold text-sidebar-foreground text-sm">
+          {showArchived ? t("chats.archived") : t("tabs.chats")}
+        </h2>
+        <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setShowBatchMembers(true)}
+              >
+                <UserRoundCog size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("batchMembers.title")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showArchived ? "secondary" : "ghost"}
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setShowArchived((value) => !value)}
+              >
+                <Archive size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showArchived ? t("chats.activeConversations") : t("chats.archived")}
+            </TooltipContent>
+          </Tooltip>
+          {!showArchived && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  data-new-chat
+                  onClick={handleNew}
+                >
+                  <Plus size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("chats.startConversation")}</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
+
+      <BatchGroupMembersDialog
+        open={showBatchMembers}
+        onClose={() => setShowBatchMembers(false)}
+        conversations={conversations}
+      />
 
       <ModelPicker
         open={showModelPicker}
         onClose={() => setShowModelPicker(false)}
         onSelect={handleModelSelect}
+        includeImageModels
       />
 
       {/* Search */}
@@ -304,12 +354,12 @@ function DesktopConversationList() {
           className="flex items-center gap-2 rounded-xl px-2.5 py-1.5"
           style={{ backgroundColor: "var(--secondary)" }}
         >
-          <Search size={14} className="text-muted-foreground flex-shrink-0" />
+          <Search size={14} className="flex-shrink-0 text-muted-foreground" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("chats.searchChats")}
-            className="text-foreground placeholder:text-muted-foreground/50 flex-1 bg-transparent text-[13px] outline-none"
+            className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/50"
           />
         </div>
       </div>
@@ -319,7 +369,11 @@ function DesktopConversationList() {
         {filteredConversations.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <p className="text-muted-foreground text-xs">
-              {searchQuery ? t("chats.noResults") : t("chats.noConversations")}
+              {searchQuery
+                ? t("chats.noResults")
+                : showArchived
+                  ? t("chats.noArchived")
+                  : t("chats.noConversations")}
             </p>
           </div>
         ) : (
@@ -333,6 +387,8 @@ function DesktopConversationList() {
               onClear={() => clearConversationMessages(conv.id)}
               onRename={(title) => renameConversation(conv.id, title)}
               onTogglePin={() => togglePinConversation(conv.id)}
+              onArchive={() => setConversationArchived(conv.id, true)}
+              onRestore={() => setConversationArchived(conv.id, false)}
             />
           ))
         )}
@@ -349,6 +405,8 @@ function DesktopConversationItem({
   onClear,
   onRename,
   onTogglePin,
+  onArchive,
+  onRestore,
 }: {
   conversation: Conversation;
   isActive: boolean;
@@ -357,6 +415,8 @@ function DesktopConversationItem({
   onClear: () => void;
   onRename: (title: string) => void;
   onTogglePin: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
 }) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
@@ -373,12 +433,12 @@ function DesktopConversationItem({
           onClick={onSelect}
         >
           {conversation.type === "group" ? (
-            <div className="bg-primary/15 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/15">
               <Users size={15} className="text-primary" />
             </div>
           ) : (
             <div
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full font-semibold text-[11px] text-white"
               style={{ backgroundColor: getAvatarProps(conversation.title).color }}
             >
               {getAvatarProps(conversation.title).initials}
@@ -402,16 +462,16 @@ function DesktopConversationItem({
                   if (e.key === "Escape") setIsRenaming(false);
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="text-sidebar-foreground border-primary w-full border-b bg-transparent text-[13px] font-medium outline-none"
+                className="w-full border-primary border-b bg-transparent font-medium text-[13px] text-sidebar-foreground outline-none"
               />
             ) : (
-              <p className="text-sidebar-foreground flex items-center gap-1 truncate text-[13px] font-medium">
-                {conversation.pinned && <Pin size={12} className="text-primary flex-shrink-0" />}
+              <p className="flex items-center gap-1 truncate font-medium text-[13px] text-sidebar-foreground">
+                {conversation.pinned && <Pin size={12} className="flex-shrink-0 text-primary" />}
                 <span className="truncate">{conversation.title}</span>
               </p>
             )}
             {conversation.lastMessage && (
-              <p className="text-muted-foreground mt-0.5 truncate text-[11px]">
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {conversation.lastMessage}
               </p>
             )}
@@ -430,15 +490,33 @@ function DesktopConversationItem({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36">
+              {!conversation.archived && (
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePin();
+                  }}
+                >
+                  <Pin size={14} className="mr-2" />
+                  {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className="text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onTogglePin();
+                  conversation.archived ? onRestore() : onArchive();
                 }}
               >
-                <Pin size={14} className="mr-2" />
-                {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+                {conversation.archived ? (
+                  <ArchiveRestore size={14} className="mr-2" />
+                ) : (
+                  <Archive size={14} className="mr-2" />
+                )}
+                {conversation.archived
+                  ? t("chat.restoreConversation")
+                  : t("chat.archiveConversation")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-xs"
@@ -451,7 +529,7 @@ function DesktopConversationItem({
                 {t("chat.clearHistory")}
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive text-xs"
+                className="text-destructive text-xs focus:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete();
@@ -465,9 +543,22 @@ function DesktopConversationItem({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-40">
-        <ContextMenuItem className="text-xs" onClick={onTogglePin}>
-          <Pin size={14} className="mr-2" />
-          {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+        {!conversation.archived && (
+          <ContextMenuItem className="text-xs" onClick={onTogglePin}>
+            <Pin size={14} className="mr-2" />
+            {conversation.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
+          </ContextMenuItem>
+        )}
+        <ContextMenuItem
+          className="text-xs"
+          onClick={conversation.archived ? onRestore : onArchive}
+        >
+          {conversation.archived ? (
+            <ArchiveRestore size={14} className="mr-2" />
+          ) : (
+            <Archive size={14} className="mr-2" />
+          )}
+          {conversation.archived ? t("chat.restoreConversation") : t("chat.archiveConversation")}
         </ContextMenuItem>
         <ContextMenuItem
           className="text-xs"
@@ -484,7 +575,7 @@ function DesktopConversationItem({
           {t("chat.clearHistory")}
         </ContextMenuItem>
         <ContextMenuItem
-          className="text-destructive focus:text-destructive text-xs"
+          className="text-destructive text-xs focus:text-destructive"
           onClick={onDelete}
         >
           <Trash2 size={14} className="mr-2" />
@@ -495,13 +586,13 @@ function DesktopConversationItem({
   );
 }
 
-function DesktopEmptyState({ section }: { section: DesktopSection }) {
+function DesktopEmptyState() {
   const { t } = useTranslation();
   return (
-    <div className="text-muted-foreground flex h-full flex-col items-center justify-center">
+    <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
       <img src="/logo.png" alt="Talkio" className="mb-4 h-32 w-32 object-contain" />
-      <p className="text-lg font-medium">Talkio</p>
-      <p className="text-muted-foreground/60 mt-1 text-sm">{t("chats.startConversation")}</p>
+      <p className="font-medium text-lg">Talkio</p>
+      <p className="mt-1 text-muted-foreground/60 text-sm">{t("chats.startConversation")}</p>
     </div>
   );
 }

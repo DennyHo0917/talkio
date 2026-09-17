@@ -22,21 +22,22 @@ interface ModelsPageProps {
   onCreateGroup?: () => void;
   /** Desktop: open a provider's edit page. Mobile falls back to MobileNav. */
   onEditProvider?: (providerId: string) => void;
-  isMobile?: boolean;
 }
 
 export function ModelsPage({
   onNavigateToChat,
   onCreateGroup,
   onEditProvider,
-  isMobile = false,
 }: ModelsPageProps = {}) {
   const { t } = useTranslation();
   const mobileNav = useMobileNav();
   const models = useProviderStore((s) => s.models);
   const providers = useProviderStore((s) => s.providers);
-  const getEnabledModels = useProviderStore((s) => s.getEnabledModels);
-  const enabledModels = useMemo(() => getEnabledModels(), [models, providers]);
+  const getEnabledConversationModels = useProviderStore((s) => s.getEnabledConversationModels);
+  const enabledModels = useMemo(
+    () => getEnabledConversationModels(),
+    [getEnabledConversationModels, models, providers],
+  );
   const getProviderById = useProviderStore((s) => s.getProviderById);
   const createConversation = useChatStore((s) => s.createConversation);
   const [searchQuery, setSearchQuery] = useState("");
@@ -137,7 +138,7 @@ export function ModelsPage({
       {/* iOS Large Title Header */}
       <div className="flex-shrink-0 px-4 pt-2 pb-1">
         <div className="mb-1 flex items-center justify-between">
-          <h1 className="text-foreground text-[20px] font-bold tracking-tight">
+          <h1 className="font-bold text-[20px] text-foreground tracking-tight">
             {t("models.title")}
           </h1>
           <div className="flex items-center gap-1">
@@ -168,7 +169,7 @@ export function ModelsPage({
           >
             <IoSearchOutline size={18} color="var(--muted-foreground)" />
             <input
-              className="text-foreground ml-2 flex-1 bg-transparent text-[15px] outline-none"
+              className="ml-2 flex-1 bg-transparent text-[15px] text-foreground outline-none"
               placeholder={t("providerEdit.searchModels")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -200,11 +201,11 @@ export function ModelsPage({
                   className="sticky top-0 z-10 flex items-center justify-between px-5 py-1.5"
                   style={{ backgroundColor: "var(--secondary)" }}
                 >
-                  <p className="text-muted-foreground text-[13px] font-semibold">{section.title}</p>
+                  <p className="font-semibold text-[13px] text-muted-foreground">{section.title}</p>
                   {section.data[0]?.providerId && (
                     <button
                       onClick={() => handleManageProvider(section.data[0].providerId)}
-                      className="text-primary text-[12px] font-medium active:opacity-60"
+                      className="font-medium text-[12px] text-primary active:opacity-60"
                     >
                       {t("models.manage")}
                     </button>
@@ -226,16 +227,16 @@ export function ModelsPage({
                     >
                       {/* Avatar (1:1 RN — rounded-full, 2-char initials) */}
                       <div
-                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-semibold text-sm text-white"
                         style={{ backgroundColor: mColor }}
                       >
                         {mInitials}
                       </div>
                       <div className="min-w-0 flex-1 text-left">
-                        <p className="text-foreground truncate text-[16px] font-medium">
+                        <p className="truncate font-medium text-[16px] text-foreground">
                           {model.displayName}
                         </p>
-                        <p className="text-muted-foreground truncate text-[13px]">
+                        <p className="truncate text-[13px] text-muted-foreground">
                           {model.modelId}
                         </p>
                       </div>
@@ -264,7 +265,7 @@ export function ModelsPage({
                 <button
                   key={initial}
                   onClick={() => handleIndexClick(sectionTitle)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] leading-none font-bold transition-colors active:opacity-60"
+                  className="flex h-6 w-6 items-center justify-center rounded-full font-bold text-[12px] leading-none transition-colors active:opacity-60"
                   style={{
                     color: isActive ? "var(--primary)" : "var(--muted-foreground)",
                     backgroundColor: isActive

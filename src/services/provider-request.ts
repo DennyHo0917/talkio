@@ -3,6 +3,20 @@ import { getProfile } from "./provider-profiles/registry";
 
 export const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21";
 
+/** OpenCode-compatible endpoints need a stable session header per chat. */
+export function isOpenCodeProvider(provider: Provider): boolean {
+  if (provider.profileId === "opencode") return true;
+  try {
+    return new URL(provider.baseUrl).hostname === "opencode.ai";
+  } catch {
+    return false;
+  }
+}
+
+export function buildSessionHeaders(provider: Provider, sessionId: string): Record<string, string> {
+  return isOpenCodeProvider(provider) ? { "x-opencode-session": sessionId } : {};
+}
+
 export function isAzureOpenAIProvider(provider: Provider): boolean {
   return provider.profileId === "azure-openai" || provider.type === "azure-openai";
 }
@@ -18,16 +32,16 @@ export function providerApiVersion(provider: Provider): string | undefined {
 
 export function appendApiVersion(url: string, apiVersion?: string): string {
   if (!apiVersion) return url;
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}api-version=${encodeURIComponent(apiVersion)}`;
+  const parsed = new URL(url);
+  parsed.searchParams.set("api-version", apiVersion);
+  return parsed.toString();
 }
 
 /** Append a resource path before an existing query string. */
 export function appendResourcePath(baseUrl: string, path: string): string {
-  const queryIndex = baseUrl.indexOf("?");
-  if (queryIndex === -1) return `${baseUrl.replace(/\/+$/, "")}${path}`;
-  const root = baseUrl.slice(0, queryIndex).replace(/\/+$/, "");
-  return `${root}${path}${baseUrl.slice(queryIndex)}`;
+  const parsed = new URL(baseUrl);
+  parsed.pathname = `${parsed.pathname.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+  return parsed.toString();
 }
 
 /**
@@ -38,11 +52,11 @@ export function appendResourcePath(baseUrl: string, path: string): string {
 export function resolveAdapterBaseUrl(provider: Provider, modelId: string): string {
   const baseUrl = provider.baseUrl.replace(/\/+$/, "");
   if (!isAzureOpenAIProvider(provider)) return baseUrl;
-  const deploymentBase = `${baseUrl}/deployments/${encodeURIComponent(modelId)}`;
+  const deploymentBase = appendResourcePath(baseUrl, `/deployments/${encodeURIComponent(modelId)}`);
   return appendApiVersion(deploymentBase, providerApiVersion(provider));
 }
 
 export function resolveProviderResourceUrl(provider: Provider, path: string): string {
   const baseUrl = provider.baseUrl.replace(/\/+$/, "");
-  return appendApiVersion(`${baseUrl}${path}`, providerApiVersion(provider));
+  return appendApiVersion(appendResourcePath(baseUrl, path), providerApiVersion(provider));
 }

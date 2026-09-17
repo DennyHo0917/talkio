@@ -6,7 +6,6 @@ import {
   appAlert,
   appConfirm,
 } from "./components/shared/ConfirmDialogProvider";
-import { ToolApprovalDialog } from "./components/shared/ToolApprovalDialog";
 import { initDatabase } from "./storage/database";
 import { useProviderStore } from "./stores/provider-store";
 import { useIdentityStore } from "./stores/identity-store";
@@ -88,29 +87,42 @@ export default function App() {
           const { invoke } = await import("@tauri-apps/api/core");
           const data = await invoke<string | null>("check_pending_import");
           if (data) {
-            let parsed: { version?: string };
+            let parsed: Record<string, unknown>;
             try {
-              parsed = JSON.parse(data) as { version?: string };
+              parsed = JSON.parse(data) as Record<string, unknown>;
             } catch {
               await appAlert(i18n.t("settings.importParseError"));
               return;
             }
-            if (
-              parsed.version === "3.0" &&
-              !(await appConfirm({
-                title: i18n.t("settings.importBackup"),
-                description: i18n.t("settings.restoreConfirm"),
-                confirmText: i18n.t("settings.importBackup"),
-                destructive: true,
-              }))
-            ) {
-              return;
+            if (parsed.version === "2.0" || parsed.version === "3.0") {
+              const mcpCount =
+                Array.isArray(parsed.mcpServers) && parsed.version === "3.0"
+                  ? (parsed.mcpServers as unknown[]).length
+                  : 0;
+              const mcpNotice =
+                mcpCount > 0
+                  ? i18n.t("settings.restoreConfirmMcp", {
+                      count: mcpCount,
+                      defaultValue:
+                        "\n\nThis backup contains {{count}} MCP server configuration(s) which will be connected after import.",
+                    })
+                  : "";
+              if (
+                !(await appConfirm({
+                  title: i18n.t("settings.importBackup"),
+                  description: `${i18n.t("settings.restoreConfirm")}${mcpNotice}`,
+                  confirmText: i18n.t("settings.importBackup"),
+                  destructive: true,
+                }))
+              ) {
+                return;
+              }
             }
             const { importBackupFromString } = await import("./services/backup");
             const result = await importBackupFromString(data);
             if (result.success) {
-              useProviderStore.getState().loadFromStorage();
               useSettingsStore.getState().loadFromStorage();
+              useProviderStore.getState().loadFromStorage();
               useIdentityStore.getState().loadFromStorage();
               useMcpStore.getState().loadFromStorage();
               appAlert(i18n.t("settings.importSuccess", result.counts!));
@@ -162,7 +174,7 @@ export default function App() {
   return (
     <ConfirmDialogProvider>
       <TooltipProvider>
-        <div className="bg-background text-foreground flex h-screen w-screen flex-col overflow-hidden antialiased">
+        <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground antialiased">
           <div className="relative min-h-0 flex-1">
             <Suspense fallback={loading}>
               {ready ? isMobile ? <MobileLayout /> : <DesktopLayout /> : loading}
@@ -170,7 +182,6 @@ export default function App() {
           </div>
         </div>
         <Toaster position={isMobile ? "top-center" : "bottom-right"} richColors />
-        <ToolApprovalDialog />
       </TooltipProvider>
     </ConfirmDialogProvider>
   );

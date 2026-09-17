@@ -3,6 +3,7 @@ import type { Provider } from "../../types";
 import { buildProviderHeaders } from "../provider-headers";
 import {
   appendResourcePath,
+  buildSessionHeaders,
   resolveAdapterBaseUrl,
   resolveProviderResourceUrl,
 } from "../provider-request";
@@ -41,5 +42,29 @@ describe("provider request configuration", () => {
     expect(resolveProviderResourceUrl(azureProvider(), "/models")).toBe(
       "https://resource.openai.azure.com/openai/models?api-version=2024-10-21",
     );
+  });
+
+  it("preserves existing query parameters and hash fragments", () => {
+    const provider = azureProvider({
+      baseUrl: "https://resource.openai.azure.com/openai?tenant=talkio#models",
+    });
+    expect(resolveProviderResourceUrl(provider, "/models")).toBe(
+      "https://resource.openai.azure.com/openai/models?tenant=talkio&api-version=2024-10-21#models",
+    );
+  });
+
+  it("adds a conversation session header for OpenCode endpoints", () => {
+    const provider = azureProvider({
+      type: "openai",
+      profileId: undefined,
+      baseUrl: "https://opencode.ai/zen/go/v1",
+    });
+    expect(buildSessionHeaders(provider, "conversation-1")).toEqual({
+      "x-opencode-session": "conversation-1",
+    });
+  });
+
+  it("does not add OpenCode headers to unrelated providers", () => {
+    expect(buildSessionHeaders(azureProvider(), "conversation-1")).toEqual({});
   });
 });

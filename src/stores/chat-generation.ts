@@ -4,7 +4,7 @@
  * including tool calls, think-tag parsing, and context compression.
  */
 import type { Message, Conversation, ConversationParticipant } from "../types";
-import { MessageStatus } from "../types";
+import { getSupportedReasoningEfforts, MessageStatus } from "../types";
 import { useIdentityStore } from "./identity-store";
 import { useProviderStore } from "./provider-store";
 import { useBuiltInToolsStore } from "./built-in-tools-store";
@@ -24,11 +24,9 @@ import { updateTask } from "../storage/database";
 import { getBuiltInToolDefs } from "../services/built-in-tools";
 import { getMcpToolDefsForIdentity, refreshMcpConnections } from "../services/mcp";
 import { generateId } from "../lib/id";
-import i18n from "../i18n";
 import { buildProviderHeaders } from "../services/provider-headers";
-import { getAdapter } from "../services/provider-adapters";
 import { resolveAdapterBaseUrl } from "../services/provider-request";
-import { NormalModelRuntime } from "../services/runtime/model-runtime";
+import { AISdkRuntime, createModelResolver } from "../services/runtime/ai-sdk/ai-sdk-runtime";
 import type { GenerationEvent } from "../services/runtime/events";
 import {
   GenerationRunError,
@@ -42,7 +40,7 @@ import {
   applyCompression,
   type ContentAccumulator,
 } from "./generation-helpers";
-import { runToolCallLoop } from "./tool-call-loop";
+import { createToolExecutor } from "./tool-executor";
 import { persistGeneratedImages } from "../services/image-store";
 
 const MAX_HISTORY = 200;
@@ -96,6 +94,13 @@ export function applyRuntimeEvent(
   }
   if (event.type === "image-generated") {
     processSseDelta(acc, { images: [event.url] });
+    return;
+  }
+  if (event.type === "tool-result") {
+    acc.toolResults.push({
+      toolCallId: event.callId,
+      content: typeof event.result === "string" ? event.result : JSON.stringify(event.result),
+    });
     return;
   }
   if (event.type === "tool-call-started") {
@@ -192,7 +197,10 @@ export async function generateForParticipant(
   );
 
   // Resolve tool definitions
-  const toolContext = { workspaceDir: ctx.conversation.workspaceDir || undefined };
+  const toolContext = {
+    workspaceDir: ctx.conversation.workspaceDir || undefined,
+    signal: ctx.abortController.signal,
+  };
   const builtInToolDefs = (() => {
     const defs = getBuiltInToolDefs(toolContext);
     const selected = allowedBuiltInToolNames ?? new Set<string>();
@@ -213,8 +221,7 @@ export async function generateForParticipant(
         m.status === MessageStatus.PAUSED ||
         m.id === ctx.userMsg.id,
     );
-    const adapter = getAdapter(provider.apiFormat);
-    const runtime = new NormalModelRuntime(() => adapter);
+    const runtime = new AISdkRuntime(createModelResolver());
 
     let apiMessages = buildApiMessagesForParticipant(filtered, participant, ctx.conversation, {
       workspaceTree: ctx.workspaceTree,
@@ -230,23 +237,33 @@ export async function generateForParticipant(
       provider.apiFormat,
     );
 
-    const reasoningEffort =
-      participant.reasoningEffort ||
-      (provider.apiFormat === "anthropic-messages"
-        ? undefined
-        : model.capabilities?.reasoning
-          ? "medium"
-          : undefined);
+    const supportedReasoningEfforts = getSupportedReasoningEfforts(model);
+    const reasoningEffort = supportedReasoningEfforts.includes(participant.reasoningEffort)
+      ? participant.reasoningEffort
+      : undefined;
 
     // Initial SSE stream
 
     const acc: ContentAccumulator = {
       fullContent: "",
       fullReasoning: "",
-      inThinkTag: false,
       images: [],
       pendingToolCalls: [],
+      toolResults: [],
     };
+    // The SDK runs the whole tool loop; this callback routes built-in/MCP calls
+    // and feeds images onto the message.
+    const executeTool = createToolExecutor({
+      ctx,
+      modelId: model.modelId,
+      toolDefs,
+      identity,
+      builtInEnabledByName,
+      allowedBuiltInToolNames,
+      allowedServerIds,
+      toolContext,
+      onImages: (imgs) => acc.images.push(...imgs),
+    });
     const startTime = generationStartedAt;
     const runContext = {
       runId: assistantMsgId,
@@ -272,10 +289,13 @@ export async function generateForParticipant(
         baseUrl,
         headers,
         modelId: model.modelId,
+        outputModalities: model.outputModalities,
         messages: apiMessages,
         identity,
         reasoningEffort,
+        temperature: identity?.params?.temperature,
         toolDefs,
+        executeTool,
         signal: ctx.abortController.signal,
       })) {
         applyRuntimeEvent(event, acc, toolCallIndexById);
@@ -285,6 +305,15 @@ export async function generateForParticipant(
           event.type === "image-generated"
         ) {
           flusher.schedule();
+        }
+        if (event.type === "tool-call-started" || event.type === "tool-result") {
+          // Persist both the pending call and its result so long-running tools
+          // remain visible while the SDK awaits execute().
+          await updateMessage(assistantMsgId, {
+            toolCalls: [...acc.pendingToolCalls],
+            toolResults: [...acc.toolResults],
+          });
+          notifyDbChange("messages", ctx.cid);
         }
         if (event.type === "usage") {
           usage = {
@@ -306,23 +335,14 @@ export async function generateForParticipant(
     const resetAcc = () => {
       acc.fullContent = "";
       acc.fullReasoning = "";
-      acc.inThinkTag = false;
       acc.images = [];
       acc.pendingToolCalls = [];
+      acc.toolResults = [];
     };
 
-    // Stream with auto-retry on transient errors
-    let sseUsage;
-    try {
-      ({ usage: sseUsage } = await streamOnce());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const retryable =
-        /empty response|overloaded|timeout|temporarily|503|502|network|interrupted/i.test(message);
-      if (!retryable || ctx.abortController.signal.aborted) throw error;
-      resetAcc();
-      ({ usage: sseUsage } = await streamOnce());
-    }
+    // Request-level retries are owned by the AI SDK. Re-running this whole
+    // stream here could repeat tool side effects that already completed.
+    const { usage: sseUsage } = await streamOnce();
     flusher.flush();
 
     const duration = (Date.now() - startTime) / 1000;
@@ -332,30 +352,15 @@ export async function generateForParticipant(
     let lastContent = acc.fullContent;
     let generationSucceeded = true;
 
-    // Tool calls → multi-round loop
-    if (acc.pendingToolCalls.length > 0) {
-      const result = await runToolCallLoop(
-        ctx,
-        assistantMsgId,
-        acc,
-        acc.fullReasoning,
-        apiMessages,
-        adapter,
-        baseUrl,
-        headers,
-        model.modelId,
-        identity,
-        reasoningEffort,
-        toolDefs,
-        builtInEnabledByName,
-        allowedBuiltInToolNames,
-        allowedServerIds,
-        tokenUsage,
-        toolContext,
-        provider.id,
-      );
-      lastContent = result.content;
-    } else if (!acc.fullContent && !acc.fullReasoning && acc.images.length === 0) {
+    // The SDK-managed tool loop already ran any tools within the stream above;
+    // persist the final assistant message (content + tool calls/results).
+    const isEmpty = () =>
+      !acc.fullContent &&
+      !acc.fullReasoning &&
+      acc.images.length === 0 &&
+      acc.pendingToolCalls.length === 0;
+
+    if (isEmpty()) {
       // Empty response — retry once
       resetAcc();
       const retry = await streamOnce();
@@ -368,7 +373,7 @@ export async function generateForParticipant(
         };
       }
 
-      if (!acc.fullContent && !acc.fullReasoning && acc.images.length === 0) {
+      if (isEmpty()) {
         generationSucceeded = false;
         await updateMessage(assistantMsgId, {
           isStreaming: false,
@@ -382,6 +387,8 @@ export async function generateForParticipant(
           reasoningContent: acc.fullReasoning || null,
           reasoningDuration: acc.fullReasoning ? duration : null,
           generatedImages: await persistGeneratedImages(acc.images),
+          toolCalls: acc.pendingToolCalls,
+          toolResults: acc.toolResults,
           isStreaming: false,
           status: MessageStatus.SUCCESS,
           tokenUsage,
@@ -394,6 +401,8 @@ export async function generateForParticipant(
         reasoningContent: acc.fullReasoning || null,
         reasoningDuration: acc.fullReasoning ? duration : null,
         generatedImages: await persistGeneratedImages(acc.images),
+        toolCalls: acc.pendingToolCalls,
+        toolResults: acc.toolResults,
         isStreaming: false,
         status: MessageStatus.SUCCESS,
         tokenUsage,

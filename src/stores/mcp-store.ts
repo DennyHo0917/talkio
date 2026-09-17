@@ -6,8 +6,23 @@ import { create } from "zustand";
 import { kvStore } from "../storage/kv-store";
 import { generateId } from "../lib/id";
 import type { CustomHeader } from "../types";
+import { z } from "zod";
 
 const MCP_SERVERS_KEY = "mcp_servers";
+const persistedMcpServerSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string(),
+    type: z.enum(["http", "stdio"]).optional(),
+    url: z.string(),
+    customHeaders: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    enabled: z.boolean(),
+    createdAt: z.string(),
+  })
+  .passthrough();
 
 export interface McpServerConfig {
   id: string;
@@ -61,7 +76,13 @@ export const useMcpStore = create<McpState>((set, get) => ({
   connectionStatus: {},
 
   loadFromStorage: () => {
-    const servers = kvStore.getObject<McpServerConfig[]>(MCP_SERVERS_KEY) ?? [];
+    const raw = kvStore.getObject<unknown>(MCP_SERVERS_KEY);
+    const servers = Array.isArray(raw)
+      ? raw.flatMap((value) => {
+          const result = persistedMcpServerSchema.safeParse(value);
+          return result.success ? [result.data as McpServerConfig] : [];
+        })
+      : [];
     set({ servers });
   },
 

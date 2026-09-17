@@ -8,24 +8,21 @@ import {
   IoSettings,
   IoSearchOutline,
   IoCloseCircle,
-  IoSparkles,
-  IoChatbubbleOutline,
   IoAddCircleOutline,
-  IoTrashOutline,
   IoPeopleOutline,
 } from "../../icons";
-import { ModelPicker } from "../shared/ModelPicker";
 import { MobileStack } from "./MobileStack";
 import { SettingsMainContent } from "./SettingsMainContent";
 import { DiscoverPage } from "../../pages/DiscoverPage";
 import { ModelsPage } from "../../pages/settings/ModelsPage";
-import { useChatStore, type ChatState } from "../../stores/chat-store";
+import { useChatStore } from "../../stores/chat-store";
 import { useConversations } from "../../hooks/useDatabase";
 import { useProviderStore } from "../../stores/provider-store";
 import { useIdentityStore } from "../../stores/identity-store";
 import type { Conversation } from "../../types";
 import { getAvatarProps } from "../../lib/avatar-utils";
 import { useConfirm } from "../shared/ConfirmDialogProvider";
+import { BatchGroupMembersDialog } from "../shared/BatchGroupMembersDialog";
 import i18n from "../../i18n";
 
 // ── Tab Icons ──
@@ -103,7 +100,7 @@ export function MobileTabLayout() {
           className="absolute inset-0"
           style={{ display: activeTab === "experts" ? undefined : "none" }}
         >
-          <ModelsPage isMobile />
+          <ModelsPage />
         </div>
         <div
           className="absolute inset-0"
@@ -138,7 +135,7 @@ export function MobileTabLayout() {
             style={{ color: activeTab === id ? "var(--primary)" : "var(--muted-foreground)" }}
           >
             <Icon />
-            <span className="text-[10px] leading-tight font-medium">{t(labelKey)}</span>
+            <span className="font-medium text-[10px] leading-tight">{t(labelKey)}</span>
           </button>
         ))}
       </div>
@@ -151,7 +148,7 @@ export { MobileChatDetail } from "./MobileChatDetail";
 
 // ── Chats List (1:1 RN original) ──
 
-type FilterType = "all" | "single" | "group";
+type FilterType = "all" | "single" | "group" | "archived";
 
 function MobileConversationList({
   onNavigateToExperts,
@@ -166,10 +163,11 @@ function MobileConversationList({
   const conversations = useConversations();
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const providers = useProviderStore((s) => s.providers);
-  const models = useProviderStore((s) => s.models);
+  const _models = useProviderStore((s) => s.models);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
+  const [showBatchMembers, setShowBatchMembers] = useState(false);
 
   const hasProviders = providers.some(
     (p) => (p.status as string) === "active" || p.status === "connected",
@@ -178,6 +176,7 @@ function MobileConversationList({
   const filtered = useMemo(
     () =>
       conversations.filter((c: Conversation) => {
+        if (filter === "archived" ? !c.archived : c.archived) return false;
         if (filter === "single" && c.type !== "single") return false;
         if (filter === "group" && c.type !== "group") return false;
         if (searchQuery) {
@@ -196,10 +195,18 @@ function MobileConversationList({
       {/* iOS Large Title Header */}
       <div className="flex-shrink-0 px-4 pt-2 pb-1">
         <div className="mb-1 flex items-center justify-between">
-          <h1 className="text-foreground text-[20px] font-bold tracking-tight">
+          <h1 className="font-bold text-[20px] text-foreground tracking-tight">
             {t("tabs.chats")}
           </h1>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t("batchMembers.title")}
+              onClick={() => setShowBatchMembers(true)}
+              className="p-2 text-primary"
+            >
+              <IoPeopleOutline size={22} />
+            </button>
             <button
               type="button"
               onClick={() => mobileNav?.pushAddMember()}
@@ -230,7 +237,7 @@ function MobileConversationList({
           >
             <IoSearchOutline size={18} color="var(--muted-foreground)" />
             <input
-              className="text-foreground ml-2 flex-1 bg-transparent text-[15px] outline-none"
+              className="ml-2 flex-1 bg-transparent text-[15px] text-foreground outline-none"
               placeholder={t("chats.searchChats")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -248,11 +255,11 @@ function MobileConversationList({
       {/* Filter Pills (1:1 RN — filters by conv.type) */}
       <div className="px-4 pb-3">
         <div className="flex gap-2">
-          {(["all", "single", "group"] as FilterType[]).map((f) => (
+          {(["all", "single", "group", "archived"] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors active:opacity-70 ${
+              className={`rounded-full px-4 py-1.5 font-semibold text-xs transition-colors active:opacity-70 ${
                 filter === f ? "text-white" : "text-foreground"
               }`}
               style={{
@@ -263,35 +270,59 @@ function MobileConversationList({
                 ? t("chats.filterAll")
                 : f === "single"
                   ? t("chats.filterSingle")
-                  : t("chats.filterGroups")}
+                  : f === "group"
+                    ? t("chats.filterGroups")
+                    : t("chats.archived")}
             </button>
           ))}
         </div>
       </div>
 
+      <BatchGroupMembersDialog
+        open={showBatchMembers}
+        onClose={() => setShowBatchMembers(false)}
+        conversations={conversations}
+      />
       {/* List */}
       <div className="flex flex-1 flex-col overflow-y-auto">
         {filtered.length === 0 ? (
-          <OnboardingOrEmpty
-            hasProviders={hasProviders}
-            onNew={onNavigateToExperts}
-            onNavigateToSettings={onNavigateToSettings}
-          />
+          filter === "archived" || searchQuery ? (
+            <p className="flex flex-1 items-center justify-center px-4 text-center text-muted-foreground text-sm">
+              {filter === "archived" ? t("chats.noArchived") : t("chats.noResults")}
+            </p>
+          ) : (
+            <OnboardingOrEmpty
+              hasProviders={hasProviders}
+              onNew={onNavigateToExperts}
+              onNavigateToSettings={onNavigateToSettings}
+            />
+          )
         ) : (
           filtered.map((conv) => (
-            <ConversationItem
-              key={conv.id}
-              conversation={conv}
-              onSelect={() => mobileNav?.pushChat(conv.id)}
-              onDelete={async () => {
-                const ok = await confirm({
-                  title: t("chat.deleteConversation"),
-                  description: t("chat.deleteConversationConfirm"),
-                  destructive: true,
-                });
-                if (ok) deleteConversation(conv.id);
-              }}
-            />
+            <div key={conv.id} className="flex items-center">
+              <ConversationItem
+                key={conv.id}
+                conversation={conv}
+                onSelect={() => mobileNav?.pushChat(conv.id)}
+                onDelete={async () => {
+                  const ok = await confirm({
+                    title: t("chat.deleteConversation"),
+                    description: t("chat.deleteConversationConfirm"),
+                    destructive: true,
+                  });
+                  if (ok) deleteConversation(conv.id);
+                }}
+              />
+              <button
+                type="button"
+                className="shrink-0 px-3 py-2 text-primary text-xs"
+                onClick={() =>
+                  useChatStore.getState().setConversationArchived(conv.id, !conv.archived)
+                }
+              >
+                {conv.archived ? t("chat.restoreConversation") : t("chat.archiveConversation")}
+              </button>
+            </div>
           ))
         )}
       </div>
@@ -315,13 +346,13 @@ function OnboardingOrEmpty({
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8">
         <img src="/logo.png" alt="Talkio" className="mb-6 h-20 w-20 object-contain" />
-        <p className="text-foreground text-center text-xl font-bold">{t("settings.appName")}</p>
-        <p className="text-muted-foreground mt-3 text-center text-sm leading-5">
+        <p className="text-center font-bold text-foreground text-xl">{t("settings.appName")}</p>
+        <p className="mt-3 text-center text-muted-foreground text-sm leading-5">
           {t("models.configureHint")}
         </p>
         <button
           onClick={onNavigateToSettings}
-          className="mt-6 rounded-xl px-8 py-3 text-base font-semibold text-white active:opacity-80"
+          className="mt-6 rounded-xl px-8 py-3 font-semibold text-base text-white active:opacity-80"
           style={{ backgroundColor: "var(--primary)" }}
         >
           {t("models.configureProvider")}
@@ -333,10 +364,10 @@ function OnboardingOrEmpty({
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8">
       <img src="/logo.png" alt="Talkio" className="h-14 w-14 object-contain opacity-40" />
-      <p className="text-muted-foreground mt-3 text-center text-sm">{t("chats.noConversations")}</p>
+      <p className="mt-3 text-center text-muted-foreground text-sm">{t("chats.noConversations")}</p>
       <button
         onClick={onNew}
-        className="mt-4 rounded-full px-6 py-2.5 text-sm font-medium text-white active:opacity-80"
+        className="mt-4 rounded-full px-6 py-2.5 font-medium text-sm text-white active:opacity-80"
         style={{ backgroundColor: "var(--primary)" }}
       >
         {t("chats.startConversation")}
@@ -422,7 +453,7 @@ function ConversationItem({
           </div>
         ) : (
           <div
-            className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-semibold text-white"
+            className="flex h-12 w-12 items-center justify-center rounded-full font-semibold text-sm text-white"
             style={{ backgroundColor: avatarColor }}
           >
             {initials}
@@ -442,7 +473,7 @@ function ConversationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-foreground flex flex-1 items-center gap-1 truncate text-[16px] font-semibold">
+          <span className="flex flex-1 items-center gap-1 truncate font-semibold text-[16px] text-foreground">
             {conversation.pinned && (
               <svg
                 width="14"
@@ -461,9 +492,9 @@ function ConversationItem({
             )}
             <span className="truncate">{isGroup ? conversation.title : modelName}</span>
           </span>
-          <span className="text-muted-foreground ml-2 flex-shrink-0 text-xs">{timeStr}</span>
+          <span className="ml-2 flex-shrink-0 text-muted-foreground text-xs">{timeStr}</span>
         </div>
-        <p className="text-muted-foreground truncate text-sm">
+        <p className="truncate text-muted-foreground text-sm">
           {identity ? `${identity.name}: ` : ""}
           {conversation.lastMessage ?? t("chats.startConversation")}
         </p>

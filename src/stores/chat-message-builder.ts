@@ -2,6 +2,7 @@
  * Chat message building utilities — extracted from chat-store.ts.
  * Pure functions for constructing API messages from conversation state.
  */
+import type { ModelMessage } from "ai";
 import type { Message, Conversation, ConversationParticipant, MessageKind } from "../types";
 import { MessageStatus } from "../types";
 import { useProviderStore } from "./provider-store";
@@ -181,11 +182,11 @@ export function extractMentionedParticipants(
   return [...mentioned];
 }
 
-/** Multimodal message content: leading text (if any) followed by the images. */
+/** Multimodal user content: leading text (if any) followed by the images (AI SDK ImagePart). */
 function toImageContent(text: string, uris: string[]) {
-  const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+  const parts: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
   if (text) parts.push({ type: "text", text });
-  for (const uri of uris) parts.push({ type: "image_url", image_url: { url: uri } });
+  for (const uri of uris) parts.push({ type: "image", image: uri });
   return parts;
 }
 
@@ -203,7 +204,7 @@ export function buildApiMessagesForParticipant(
     /** Extra instructions appended to the participant's system prompt (moderator/task flows). */
     systemPromptAppend?: string;
   },
-): Array<{ role: string; content: unknown; tool_calls?: unknown; tool_call_id?: string }> {
+): ModelMessage[] {
   const identity = participant.identityId
     ? useIdentityStore.getState().getIdentityById(participant.identityId)
     : null;
@@ -235,11 +236,7 @@ export function buildApiMessagesForParticipant(
       "\n- `list_workspace_dir`: List files in a directory (omit path for root)." +
       "\n- `search_workspace`: Search for a text pattern across all files." +
       "\n- `edit_workspace_file`: Edit a file using search/replace (provide path, old_content, new_content). Always read the file first before editing." +
-      "\n- `git_status`: Check git status (modified/staged/untracked files)." +
-      "\n- `git_diff`: Show file changes (set staged=true for staged changes)." +
-      "\n- `git_log`: Show recent commit history." +
-      "\n- `git_command`: Run any allowed git subcommand. Write operations (add, commit, push, etc.) require user confirmation. Dangerous operations (force push, hard reset, rebase) are blocked." +
-      "\nUse these tools to explore, read, edit files and manage git. Do NOT ask the user to paste file content." +
+      "\nUse these tools to explore, read, and edit files. Do NOT ask the user to paste file content." +
       "\nUse relative paths when you discuss files.";
   }
 
@@ -257,8 +254,7 @@ export function buildApiMessagesForParticipant(
   } else if (identity?.systemPrompt || workspaceHint || options?.systemPromptAppend) {
     apiMessages.push({
       role: "system",
-      content:
-        (identity?.systemPrompt || "") + workspaceHint + (options?.systemPromptAppend ?? ""),
+      content: (identity?.systemPrompt || "") + workspaceHint + (options?.systemPromptAppend ?? ""),
     });
   }
 
@@ -317,7 +313,10 @@ export function buildApiMessagesForParticipant(
     apiMessages.push({ role, content });
   }
 
-  return apiMessages;
+  // Shapes above are valid AI SDK ModelMessages (system/user/assistant with
+  // string or text+image parts); the dynamic role makes TS's discriminated
+  // union awkward, so assert here. Validated by the modelMessageSchema tests.
+  return apiMessages as unknown as ModelMessage[];
 }
 
 /**

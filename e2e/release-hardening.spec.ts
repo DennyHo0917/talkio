@@ -49,7 +49,7 @@ test("provider to chat flow preserves model state and classifies authentication 
   await expect(
     page.getByText("Authentication failed. Check the provider API key and access permissions."),
   ).toBeVisible();
-  await expect(page.getByText(/API Error 401/)).toBeVisible();
+  await expect(page.getByText(/Invalid API key/)).toBeVisible();
 });
 
 test("clearing history aborts an active generation and removes its placeholder", async ({

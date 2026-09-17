@@ -11,10 +11,12 @@ import {
   editWorkspaceFile,
   isBinaryPath,
 } from "./workspace";
-import { gitExecute, isGitWriteCommand } from "./git-tools";
-import { appConfirm } from "../components/shared/ConfirmDialogProvider";
 import { isDesktop } from "../lib/platform";
-import { generateImages, isImageGenerationConfigured } from "./image-generation";
+import {
+  generateImages,
+  getAvailableImageModels,
+  isImageGenerationConfigured,
+} from "./image-generation";
 import { persistGeneratedImages } from "./image-store";
 
 export interface ToolResult {
@@ -31,6 +33,7 @@ export interface ToolResult {
 
 export interface ToolContext {
   workspaceDir?: string;
+  signal?: AbortSignal;
 }
 
 export interface BuiltInToolDef {
@@ -80,18 +83,27 @@ function failResult(error: string): ToolResult {
   return { success: false, content: "", error };
 }
 
-async function handleGenerateImage(args: Record<string, unknown>): Promise<ToolResult> {
+async function handleGenerateImage(
+  args: Record<string, unknown>,
+  context?: ToolContext,
+): Promise<ToolResult> {
   const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
   if (!prompt) return failResult("Missing required parameter: prompt");
   const size = typeof args.size === "string" && args.size ? args.size : undefined;
+  const aspectRatio =
+    typeof args.aspect_ratio === "string" && args.aspect_ratio ? args.aspect_ratio : undefined;
+  const model = typeof args.model === "string" && args.model ? args.model : undefined;
   try {
-    const images = await persistGeneratedImages(await generateImages({ prompt, size }));
+    const images = await persistGeneratedImages(
+      await generateImages({ prompt, size, aspectRatio, model, signal: context?.signal }),
+    );
     return {
       success: true,
       content: `Generated ${images.length} image(s) from the prompt. They are already displayed to the user; do not describe the pixels you cannot see.`,
       images,
     };
   } catch (err) {
+    if (context?.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
     return failResult(err instanceof Error ? err.message : "Image generation failed");
   }
 }
@@ -167,87 +179,6 @@ async function handleEditWorkspaceFile(
     return { success: true, content: `Successfully edited ${result.path}` };
   } catch (err) {
     return failResult(err instanceof Error ? err.message : "Edit failed");
-  }
-}
-
-async function handleGitStatus(
-  _args: Record<string, unknown>,
-  context?: ToolContext,
-): Promise<ToolResult> {
-  const ws = requireWorkspaceDir(context);
-  if (typeof ws !== "string") return ws;
-  try {
-    const result = await gitExecute(ws, "status", ["--short", "--branch"]);
-    return { success: result.success, content: result.stdout || result.stderr };
-  } catch (err) {
-    return failResult(err instanceof Error ? err.message : "git status failed");
-  }
-}
-
-async function handleGitDiff(
-  args: Record<string, unknown>,
-  context?: ToolContext,
-): Promise<ToolResult> {
-  const ws = requireWorkspaceDir(context);
-  if (typeof ws !== "string") return ws;
-  const diffArgs: string[] = [];
-  if (typeof args.staged === "boolean" && args.staged) diffArgs.push("--cached");
-  if (typeof args.path === "string" && args.path) diffArgs.push("--", args.path);
-  try {
-    const result = await gitExecute(ws, "diff", diffArgs);
-    const output = result.stdout || "(no changes)";
-    return { success: result.success, content: output.slice(0, 8000) };
-  } catch (err) {
-    return failResult(err instanceof Error ? err.message : "git diff failed");
-  }
-}
-
-async function handleGitLog(
-  args: Record<string, unknown>,
-  context?: ToolContext,
-): Promise<ToolResult> {
-  const ws = requireWorkspaceDir(context);
-  if (typeof ws !== "string") return ws;
-  const count = typeof args.count === "number" ? Math.min(args.count, 50) : 10;
-  try {
-    const result = await gitExecute(ws, "log", [`--oneline`, `-n`, `${count}`, `--no-color`]);
-    return { success: result.success, content: result.stdout || result.stderr };
-  } catch (err) {
-    return failResult(err instanceof Error ? err.message : "git log failed");
-  }
-}
-
-async function handleGitCommand(
-  args: Record<string, unknown>,
-  context?: ToolContext,
-): Promise<ToolResult> {
-  const ws = requireWorkspaceDir(context);
-  if (typeof ws !== "string") return ws;
-  const subcommand = typeof args.subcommand === "string" ? args.subcommand : "";
-  if (!subcommand) return failResult("Missing required parameter: subcommand");
-  const gitArgs = Array.isArray(args.args)
-    ? args.args.filter((a): a is string => typeof a === "string")
-    : [];
-
-  // Write commands require user confirmation
-  if (isGitWriteCommand(subcommand)) {
-    const cmdStr = `git ${subcommand} ${gitArgs.join(" ")}`.trim();
-    const ok = await appConfirm({
-      title: "Git Operation",
-      description: `AI wants to run:\n\n${cmdStr}\n\nAllow this operation?`,
-    });
-    if (!ok) return failResult("User declined the git operation");
-  }
-
-  try {
-    const result = await gitExecute(ws, subcommand, gitArgs);
-    const output = (result.stdout + (result.stderr ? `\n${result.stderr}` : "")).trim();
-    return {
-      success: result.success,
-      content: output.slice(0, 8000) || (result.success ? "(done)" : "(no output)"),
-    };
-  } catch (err) {
-    return failResult(err instanceof Error ? err.message : `git ${subcommand} failed`);
   }
 }
 
@@ -368,86 +299,20 @@ export const BUILT_IN_TOOLS: BuiltInToolDef[] = [
           description:
             "Optional image size, e.g. '1024x1024' (square), '1536x1024' (landscape), '1024x1536' (portrait). Omit for the model default.",
         },
+        aspect_ratio: {
+          type: "string",
+          description: "Optional aspect ratio, e.g. '1:1', '16:9', or '9:16'.",
+        },
+        model: {
+          type: "string",
+          description: "Optional image model. Omit to use the configured default.",
+        },
       },
       required: ["prompt"],
     },
-    handler: (args) => handleGenerateImage(args),
+    handler: (args, context) => handleGenerateImage(args, context),
     enabledByDefault: true,
     requiresImageConfig: true,
-  },
-  // ── Git tools ──
-  {
-    name: "git_status",
-    description:
-      "Get the current git status of the workspace (short format with branch info). Use this to check which files are modified, staged, or untracked.",
-    parameters: { type: "object", properties: {} },
-    handler: (args, context) => handleGitStatus(args, context),
-    enabledByDefault: true,
-    requiresWorkspace: true,
-    desktopOnly: true,
-  },
-  {
-    name: "git_diff",
-    description:
-      "Show git diff of the workspace. By default shows unstaged changes. Set staged=true for staged changes. Optionally specify a file path.",
-    parameters: {
-      type: "object",
-      properties: {
-        staged: {
-          type: "boolean",
-          description: "If true, show staged (cached) changes instead of unstaged",
-        },
-        path: {
-          type: "string",
-          description: "Optional file path to limit diff to a specific file",
-        },
-      },
-    },
-    handler: (args, context) => handleGitDiff(args, context),
-    enabledByDefault: true,
-    requiresWorkspace: true,
-    desktopOnly: true,
-  },
-  {
-    name: "git_log",
-    description: "Show recent git commit history (oneline format). Default 10 commits, max 50.",
-    parameters: {
-      type: "object",
-      properties: {
-        count: {
-          type: "number",
-          description: "Number of recent commits to show (default 10, max 50)",
-        },
-      },
-    },
-    handler: (args, context) => handleGitLog(args, context),
-    enabledByDefault: true,
-    requiresWorkspace: true,
-    desktopOnly: true,
-  },
-  {
-    name: "git_command",
-    description:
-      "Execute a git command in the workspace. Read commands (status, log, diff, branch, show, rev-parse, remote) run directly. Write commands (add, commit, checkout, stash, pull, push) require user confirmation. Dangerous operations (force push, hard reset, rebase) are blocked. Use the specific git_status/git_diff/git_log tools when possible; use this for other allowed commands.",
-    parameters: {
-      type: "object",
-      properties: {
-        subcommand: {
-          type: "string",
-          description: "Git subcommand (e.g. 'add', 'commit', 'branch', 'remote')",
-        },
-        args: {
-          type: "array",
-          items: { type: "string" },
-          description: "Arguments for the git subcommand (e.g. ['-m', 'fix bug'] for commit)",
-        },
-      },
-      required: ["subcommand"],
-    },
-    handler: (args, context) => handleGitCommand(args, context),
-    enabledByDefault: true,
-    requiresWorkspace: true,
-    desktopOnly: true,
   },
 ];
 
@@ -464,6 +329,7 @@ export async function executeBuiltInTool(
   try {
     return await tool.handler(args, context);
   } catch (err) {
+    if (context?.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
     return {
       success: false,
       content: "",
@@ -476,17 +342,30 @@ export async function executeBuiltInTool(
  * Get tool definitions formatted for the OpenAI API tools parameter.
  */
 export function getBuiltInToolDefs(context?: ToolContext) {
+  const imageModels = getAvailableImageModels();
   return BUILT_IN_TOOLS.filter(
     (t) =>
       (!t.requiresWorkspace || !!context?.workspaceDir) &&
       (!t.desktopOnly || isDesktop) &&
       (!t.requiresImageConfig || isImageGenerationConfigured()),
-  ).map((t) => ({
-    type: "function" as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    },
-  }));
+  ).map((t) => {
+    const parameters =
+      t.name === "generate_image" && imageModels.length > 0
+        ? {
+            ...t.parameters,
+            properties: {
+              ...(t.parameters.properties as Record<string, unknown>),
+              model: {
+                type: "string",
+                enum: imageModels.map((model) => model.selectionKey),
+                description: "Optional image model. Omit to use the configured default.",
+              },
+            },
+          }
+        : t.parameters;
+    return {
+      type: "function" as const,
+      function: { name: t.name, description: t.description, parameters },
+    };
+  });
 }

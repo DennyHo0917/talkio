@@ -12,9 +12,8 @@ const MENTION_REGEX = /@(\S+?)(?=[\s,.;:!?，。！？；：]|$)/g;
 
 export function parseMentions(text: string, participantNames: Map<string, string>): MentionMatch[] {
   const matches: MentionMatch[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = MENTION_REGEX.exec(text)) !== null) {
+  let match = MENTION_REGEX.exec(text);
+  while (match !== null) {
     const rawName = match[1];
     for (const [participantId, displayName] of participantNames) {
       const normalized = displayName.replace(/\s+/g, "");
@@ -28,6 +27,7 @@ export function parseMentions(text: string, participantNames: Map<string, string
         break;
       }
     }
+    match = MENTION_REGEX.exec(text);
   }
 
   return matches;
