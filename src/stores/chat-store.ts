@@ -13,7 +13,6 @@ import {
   updateMessage,
 } from "../storage/database";
 import { type StreamingState } from "./chat-generation";
-import { toolApproval } from "../services/tool-approval";
 import { dispatchMessageGeneration, runAutoDiscuss } from "./chat-dispatch";
 import {
   createConversationRecord,
@@ -323,16 +322,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const next = stopConversationGeneration(conversationId, _abortControllers);
     if (conversationId) _participantAbortControllers.delete(conversationId);
     if (next) set(next);
-    // Any tool calls awaiting user approval become moot — reject them so the
-    // generation loop can unwind instead of hanging on a dialog.
-    toolApproval.rejectAll();
   },
 
   skipCurrentParticipant: () => {
     const conversationId = get().currentConversationId;
     if (!skipCurrentParticipant(conversationId, _participantAbortControllers)) return;
     set({ canSkipCurrent: false });
-    if (conversationId) toolApproval.rejectConversation(conversationId);
   },
 
   startAutoDiscuss: async (rounds: number, topicText?: string) => {
@@ -412,7 +407,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       _participantAbortControllers,
       _streamingMessages,
     );
-    toolApproval.rejectConversation(conversationId);
     set({
       ...(runtimeState ?? {}),
       autoDiscussRemaining: 0,

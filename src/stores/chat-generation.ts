@@ -251,8 +251,8 @@ export async function generateForParticipant(
       pendingToolCalls: [],
       toolResults: [],
     };
-    // The SDK runs the whole tool loop; this callback executes each tool
-    // (approval + built-in/MCP routing) and feeds images onto the message.
+    // The SDK runs the whole tool loop; this callback routes built-in/MCP calls
+    // and feeds images onto the message.
     const executeTool = createToolExecutor({
       ctx,
       modelId: model.modelId,

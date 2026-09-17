@@ -5,24 +5,13 @@
 //!
 //! Uses async mpsc channels (not polling) for efficient response handling.
 //!
-//! # Security
-//!
-//! Stdio servers are arbitrary user-installed programs, so `mcp_stdio_start`
-//! gates every *new* command behind a one-time native confirmation dialog.
-//! Approved commands are persisted (app config dir) and never asked about
-//! again — the flow is: add server in settings → click Allow once → works
-//! exactly as before. On Windows the command line is passed to `cmd.exe` as a
-//! single `/S /C` string with every token double-quoted, so `& | < > ^`
-//! inside arguments are inert (cmd still expands `%VAR%`, which we reject).
+//! On Windows the command line is passed to `cmd.exe` as a single `/S /C`
+//! string with every token double-quoted, so `& | < > ^` inside arguments
+//! are inert (cmd still expands `%VAR%`, which we reject).
 
-use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager};
-use tauri_plugin_dialog::{
-    DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
-};
+use tauri::State;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
@@ -37,108 +26,6 @@ pub struct StdioSession {
     /// Per-session receiver for stdout lines, behind its own Mutex
     /// so we can hold it during async recv() without blocking other sessions.
     stdout_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<String>>>,
-}
-
-fn approval_fingerprint(command: &str, args: &[String], env: &HashMap<String, String>) -> String {
-    let mut variables: Vec<_> = env.iter().collect();
-    variables.sort_by_key(|(key, _)| *key);
-    let serialized = serde_json::to_vec(&(command, args, variables))
-        .expect("MCP launch specification is serializable");
-    format!("v2:{:x}", Sha256::digest(serialized))
-}
-
-fn approved_commands_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path()
-        .app_config_dir()
-        .ok()
-        .map(|dir| dir.join("mcp_approved_commands.json"))
-}
-
-fn load_approved_commands(app: &AppHandle) -> HashSet<String> {
-    let Some(path) = approved_commands_path(app) else {
-        return HashSet::new();
-    };
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
-        .map(|list| list.into_iter().collect())
-        .unwrap_or_default()
-}
-
-fn save_approved_commands(app: &AppHandle, commands: &HashSet<String>) {
-    let Some(path) = approved_commands_path(app) else {
-        return;
-    };
-    let mut sorted: Vec<&String> = commands.iter().collect();
-    sorted.sort();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_string(&sorted) {
-        let _ = std::fs::write(path, json);
-    }
-}
-
-/// Ask the user once whether this command may be spawned as an MCP server.
-/// Returns Ok(()) when approved (or already approved), Err with the reason
-/// when denied. The dialog is async (callback + oneshot) so the Tauri event
-/// loop is never blocked.
-async fn ensure_command_approved(
-    app: &AppHandle,
-    command: &str,
-    args: &[String],
-    env: &HashMap<String, String>,
-) -> Result<(), String> {
-    let fingerprint = approval_fingerprint(command, args, env);
-    let mut approved = load_approved_commands(app);
-    if approved.contains(&fingerprint) {
-        return Ok(());
-    }
-
-    let mut shown_args = args.iter().take(6).cloned().collect::<Vec<_>>();
-    if args.len() > shown_args.len() {
-        shown_args.push(format!("… (+{} more)", args.len() - shown_args.len()));
-    }
-    let summary = if shown_args.is_empty() {
-        "(no arguments)".to_string()
-    } else {
-        shown_args.join(" ")
-    };
-
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .message(format!(
-            "Talkio wants to start this MCP server:\n\n{command}\n{summary}\n\n\
-             You only need to allow it once — it will run every time after this."
-        ))
-        .title("Allow MCP server?")
-        .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::YesNoCancelCustom(
-            "Allow".into(),
-            "Deny".into(),
-            "Cancel".into(),
-        ))
-        .show_with_result(move |result| {
-            let _ = tx.send(result);
-        });
-
-    match rx.await {
-        Ok(MessageDialogResult::Yes) => {
-            approved.insert(fingerprint);
-            save_approved_commands(app, &approved);
-            log::info!("[MCP stdio] Launch specification approved by user");
-            Ok(())
-        }
-        Ok(other) => {
-            log::info!(
-                "[MCP stdio] Command denied by user ({:?}): {}",
-                other,
-                command
-            );
-            Err("MCP stdio launch denied by user".to_string())
-        }
-        Err(_) => Err("MCP stdio confirmation dialog closed".to_string()),
-    }
 }
 
 /// Quote one token for `cmd.exe /C`. Returns None for tokens that cannot be
@@ -236,60 +123,16 @@ mod tests {
         );
         assert!(build_cmd_line("cmd", &["a\"b".to_string()]).is_none());
     }
-
-    #[test]
-    fn approved_list_round_trips_json() {
-        let mut set = HashSet::new();
-        set.insert("npx".to_string());
-        set.insert("python3".to_string());
-        let json = serde_json::to_string(&set.iter().cloned().collect::<Vec<_>>()).unwrap();
-        let loaded: Vec<String> = serde_json::from_str(&json).unwrap();
-        assert_eq!(loaded.len(), 2);
-    }
-}
-
-#[cfg(test)]
-mod approval_tests {
-    use super::*;
-
-    #[test]
-    fn command_arguments_and_environment_are_all_part_of_approval() {
-        let mut env = HashMap::from([("TOKEN".to_string(), "secret-a".to_string())]);
-        let original = approval_fingerprint("npx", &["server-a".into()], &env);
-        assert_ne!(
-            original,
-            approval_fingerprint("npx", &["server-b".into()], &env)
-        );
-        assert_ne!(
-            original,
-            approval_fingerprint("node", &["server-a".into()], &env)
-        );
-        env.insert("TOKEN".into(), "secret-b".into());
-        assert_ne!(
-            original,
-            approval_fingerprint("npx", &["server-a".into()], &env)
-        );
-        assert!(!original.contains("secret-a"));
-        assert_eq!(
-            original,
-            approval_fingerprint(
-                "npx",
-                &["server-a".into()],
-                &HashMap::from([("TOKEN".into(), "secret-a".into())])
-            )
-        );
-    }
 }
 
 /// Start a new MCP stdio subprocess.
 /// Returns a session_id that the frontend uses for subsequent calls.
 #[tauri::command]
 pub async fn mcp_stdio_start(
-    app: AppHandle,
     command: String,
     args: Vec<String>,
     env: HashMap<String, String>,
-    sessions: tauri::State<'_, Sessions>,
+    sessions: State<'_, Sessions>,
 ) -> Result<String, String> {
     let command = command.trim().to_string();
     if command.is_empty() {
@@ -300,7 +143,6 @@ pub async fn mcp_stdio_start(
         return Err("MCP stdio command/args must not contain control characters".to_string());
     }
 
-    ensure_command_approved(&app, &command, &args, &env).await?;
     let session_id = Uuid::new_v4().to_string();
 
     // On Windows, commands like "npx" are actually "npx.cmd" — Command::new

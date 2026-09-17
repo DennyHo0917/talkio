@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   executeBuiltInTool: vi.fn(),
   getBuiltInToolDefs: vi.fn(),
   executeMcpToolByName: vi.fn(),
-  requestApproval: vi.fn(),
 }));
 
 vi.mock("../../services/built-in-tools", () => ({
@@ -15,9 +14,6 @@ vi.mock("../../services/built-in-tools", () => ({
 }));
 vi.mock("../../services/mcp", () => ({
   executeMcpToolByName: mocks.executeMcpToolByName,
-}));
-vi.mock("../../services/tool-approval", () => ({
-  toolApproval: { request: mocks.requestApproval },
 }));
 
 import { createToolExecutor } from "../tool-executor";
@@ -55,7 +51,6 @@ function makeExecutor(signal?: AbortSignal) {
 describe("tool executor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requestApproval.mockResolvedValue(true);
     mocks.executeMcpToolByName.mockResolvedValue(null);
   });
 
@@ -77,6 +72,23 @@ describe("tool executor", () => {
 
     await expect(Promise.all([firstResult, secondResult])).resolves.toEqual(["first", "second"]);
     expect(events).toEqual(["start:first", "end:first", "start:second", "end:second"]);
+  });
+
+  it("runs an advertised MCP tool immediately and returns its result", async () => {
+    mocks.executeBuiltInTool.mockResolvedValue(null);
+    mocks.executeMcpToolByName.mockResolvedValue({ success: true, content: "remote result" });
+    const execute = makeExecutor();
+
+    await expect(execute("first", { query: "test" })).resolves.toBe("remote result");
+    expect(mocks.executeMcpToolByName).toHaveBeenCalledWith("first", { query: "test" }, undefined);
+  });
+
+  it("does not execute tools outside the advertised set", async () => {
+    const execute = makeExecutor();
+
+    await expect(execute("unlisted", {})).resolves.toBe("Tool not found: unlisted");
+    expect(mocks.executeBuiltInTool).not.toHaveBeenCalled();
+    expect(mocks.executeMcpToolByName).not.toHaveBeenCalled();
   });
 
   it("does not start queued tools after the conversation is aborted", async () => {

@@ -6,7 +6,6 @@ import {
   appAlert,
   appConfirm,
 } from "./components/shared/ConfirmDialogProvider";
-import { ToolApprovalDialog } from "./components/shared/ToolApprovalDialog";
 import { initDatabase } from "./storage/database";
 import { useProviderStore } from "./stores/provider-store";
 import { useIdentityStore } from "./stores/identity-store";
@@ -183,7 +182,6 @@ export default function App() {
           </div>
         </div>
         <Toaster position={isMobile ? "top-center" : "bottom-right"} richColors />
-        <ToolApprovalDialog />
       </TooltipProvider>
     </ConfirmDialogProvider>
   );

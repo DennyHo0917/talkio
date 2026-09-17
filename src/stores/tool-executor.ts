@@ -1,7 +1,7 @@
 /**
  * Tool executor — builds the `execute` callback the AI SDK calls during its
- * managed tool loop. Owns Talkio's product logic around a tool call: per-tool
- * human approval, built-in vs MCP routing, and surfacing tool-produced images.
+ * managed tool loop. Owns built-in vs MCP routing and surfaces tool-produced
+ * images.
  *
  * The multi-round orchestration (call → execute → feed back → repeat) is owned
  * by the AI SDK (`stopWhen`), not by Talkio.
@@ -12,43 +12,21 @@ import {
   type ToolContext,
 } from "../services/built-in-tools";
 import { executeMcpToolByName } from "../services/mcp";
-import { toolApproval } from "../services/tool-approval";
 import type { GenerationContext } from "./chat-generation";
+import type { Identity } from "../types";
 
-/** Execute a single tool call against built-in tools or MCP, gated by approval. */
+/** Execute a single tool call against built-in tools or MCP. */
 async function executeOneTool(
   name: string,
   args: Record<string, unknown>,
   builtInEnabledByName: Record<string, boolean>,
-  identity: any,
+  identity: Identity | null | undefined,
   allowedBuiltInToolNames: Set<string> | null,
   allowedServerIds: string[] | undefined,
   toolContext: ToolContext | undefined,
-  approvalContext: {
-    conversationId: string;
-    participantName: string;
-    modelName: string;
-    availableTools: Map<string, string | undefined>;
-  },
+  availableTools: Set<string>,
 ): Promise<{ content: string; images?: string[] }> {
-  const description = approvalContext.availableTools.get(name);
-  if (!approvalContext.availableTools.has(name)) return { content: `Tool not found: ${name}` };
-
-  const risk = /^(read_|get_|list_|search_)/.test(name)
-    ? "read"
-    : /^(edit_|write_|delete_|apply_)/.test(name)
-      ? "write"
-      : "network";
-  const approved = await toolApproval.request({
-    toolName: name,
-    description,
-    args,
-    conversationId: approvalContext.conversationId,
-    participantName: approvalContext.participantName,
-    modelName: approvalContext.modelName,
-    risk,
-  });
-  if (!approved) return { content: `Tool call rejected by user: ${name}` };
+  if (!availableTools.has(name)) return { content: `Tool not found: ${name}` };
 
   const builtInGloballyEnabled = builtInEnabledByName[name] !== false;
   const builtInEnabledForIdentity =
@@ -77,8 +55,8 @@ async function executeOneTool(
 export interface ToolExecutorParams {
   ctx: GenerationContext;
   modelId: string;
-  toolDefs: any[];
-  identity: any;
+  toolDefs: Array<{ function: { name: string; description?: string } }>;
+  identity: Identity | null | undefined;
   builtInEnabledByName: Record<string, boolean>;
   allowedBuiltInToolNames: Set<string> | null;
   allowedServerIds: string[] | undefined;
@@ -95,23 +73,10 @@ export interface ToolExecutorParams {
 export function createToolExecutor(
   p: ToolExecutorParams,
 ): (name: string, input: Record<string, unknown>) => Promise<string> {
-  const availableTools = new Map<string, string | undefined>();
-  for (const definition of [...getBuiltInToolDefs(p.toolContext), ...p.toolDefs]) {
-    const tool = "function" in definition ? definition.function : definition;
-    if (typeof tool?.name === "string") {
-      availableTools.set(
-        tool.name,
-        typeof tool.description === "string" ? tool.description : undefined,
-      );
-    }
-  }
-  const participant = p.ctx.conversation.participants.find((c) => c.modelId === p.modelId);
-  const approvalContext = {
-    conversationId: p.ctx.cid,
-    participantName: participant?.nickname ?? p.modelId,
-    modelName: p.modelId,
-    availableTools,
-  };
+  const availableTools = new Set<string>([
+    ...getBuiltInToolDefs(p.toolContext).map((definition) => definition.function.name),
+    ...p.toolDefs.map((definition) => definition.function.name),
+  ]);
   let executionTail: Promise<void> = Promise.resolve();
 
   return (name, input) => {
@@ -127,7 +92,7 @@ export function createToolExecutor(
         p.allowedBuiltInToolNames,
         p.allowedServerIds,
         p.toolContext,
-        approvalContext,
+        availableTools,
       );
       if (result.images?.length && p.onImages) p.onImages(result.images);
       return result.content;

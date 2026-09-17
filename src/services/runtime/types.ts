@@ -21,8 +21,7 @@ export interface ParticipantRequest {
   toolDefs?: unknown[];
   /**
    * Executes a tool call and returns the text result fed back to the model.
-   * When provided, the runtime runs the whole call→execute→feed-back loop
-   * (SDK-managed via stopWhen); approval/MCP routing live inside this callback.
+   * When provided, the runtime runs the whole call→execute→feed-back loop.
    */
   executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
   /** Max steps for the SDK-managed tool loop (default 8). */
@@ -34,17 +33,9 @@ export interface ParticipantRequest {
   signal: AbortSignal;
 }
 
-export interface ResumeInput {
-  runId: string;
-  text?: string;
-  toolResults?: Array<{ callId: string; result: unknown }>;
-}
-
 export interface ParticipantRuntime {
-  /** Start (or resume) a generation run; events stream until completion/failure. */
+  /** Start a generation run; events stream until completion/failure. */
   run(request: ParticipantRequest): AsyncIterable<GenerationEvent>;
   /** Request cancellation of an in-flight run. */
   cancel(runId: string): Promise<void>;
-  /** Optional: resume a paused run (e.g. after user approval). */
-  resume?(runId: string, input: ResumeInput): AsyncIterable<GenerationEvent>;
 }
