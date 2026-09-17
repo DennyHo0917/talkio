@@ -163,11 +163,7 @@ export async function dispatchMessageGeneration(args: {
       text,
       images ?? [],
       activeBranchId,
-      options?.moderatorSummary
-        ? "summary-request"
-        : options?.taskId
-          ? "task-request"
-          : undefined,
+      options?.moderatorSummary ? "summary-request" : options?.taskId ? "task-request" : undefined,
     );
     await insertMessage(userMsg);
     updateConversation(cid, { lastMessage: text, lastMessageAt: userMsg.createdAt }).catch(
@@ -210,15 +206,16 @@ export async function dispatchMessageGeneration(args: {
 
   const isRetry = !!(options?.reuseUserMessageId && options?.targetParticipantIds?.length);
 
-  const systemPromptAppend = userMsg.kind === "summary-request"
-    ? i18n.t("chat.summaryInstruction")
-    : task
-      ? i18n.t("chat.taskInstruction", {
-          title: task.title,
-          description: task.description,
-          assignee: targets[0] ? getParticipantLabel(targets[0], conversation.participants) : "",
-        })
-      : undefined;
+  const systemPromptAppend =
+    userMsg.kind === "summary-request"
+      ? i18n.t("chat.summaryInstruction")
+      : task
+        ? i18n.t("chat.taskInstruction", {
+            title: task.title,
+            description: task.description,
+            assignee: targets[0] ? getParticipantLabel(targets[0], conversation.participants) : "",
+          })
+        : undefined;
 
   const ctx: GenerationContext = {
     cid,

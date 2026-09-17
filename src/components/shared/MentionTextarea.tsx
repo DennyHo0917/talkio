@@ -143,7 +143,7 @@ export const MentionTextarea = memo(function MentionTextarea({
               <div className="min-w-0">
                 <span className="block truncate">@{m.label}</span>
                 {m.secondaryLabel && (
-                  <span className="text-muted-foreground block truncate text-[10px]">
+                  <span className="block truncate text-[10px] text-muted-foreground">
                     {m.secondaryLabel}
                   </span>
                 )}

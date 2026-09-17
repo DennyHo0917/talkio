@@ -23,6 +23,82 @@ import { generateId } from "../lib/id";
 import { autoTitle } from "./chat-store-core";
 import i18n from "../i18n";
 
+export type BatchMemberOperation = "add" | "remove";
+export interface BatchMemberChangeResult {
+  conversationId: string;
+  title: string;
+  status: "updated" | "unchanged" | "failed";
+  changedCount: number;
+  error?: string;
+}
+
+function memberKey(member: { modelId: string; identityId: string | null }): string {
+  return `${member.modelId}\u0000${member.identityId ?? ""}`;
+}
+
+export async function updateMembersAcrossGroups(
+  conversationIds: string[],
+  operation: BatchMemberOperation,
+  members: { modelId: string; identityId: string | null }[],
+): Promise<BatchMemberChangeResult[]> {
+  const uniqueMembers = members.filter(
+    (member, index, list) =>
+      list.findIndex((item) => memberKey(item) === memberKey(member)) === index,
+  );
+  const requestedKeys = new Set(uniqueMembers.map(memberKey));
+  const results: BatchMemberChangeResult[] = [];
+  for (const conversationId of conversationIds) {
+    let title = conversationId;
+    try {
+      const conversation = await getConversation(conversationId);
+      if (!conversation) throw new Error(i18n.t("batchMembers.conversationMissing"));
+      if (conversation.type !== "group") throw new Error(i18n.t("batchMembers.notGroup"));
+      title = conversation.title;
+      let participants: ConversationParticipant[];
+      if (operation === "add") {
+        const existing = new Set(conversation.participants.map(memberKey));
+        const additions = uniqueMembers
+          .filter((member) => !existing.has(memberKey(member)))
+          .map((member) => ({ ...member, id: generateId() }));
+        if (additions.length === 0) {
+          results.push({ conversationId, title, status: "unchanged", changedCount: 0 });
+          continue;
+        }
+        participants = [...conversation.participants, ...additions];
+      } else {
+        participants = conversation.participants.filter(
+          (member) => !requestedKeys.has(memberKey(member)),
+        );
+        const removed = conversation.participants.length - participants.length;
+        if (removed === 0) {
+          results.push({ conversationId, title, status: "unchanged", changedCount: 0 });
+          continue;
+        }
+        if (participants.length === 0) throw new Error(i18n.t("chat.cannotRemoveLast"));
+      }
+      const changedCount = Math.abs(participants.length - conversation.participants.length);
+      const updates: Partial<Conversation> = {
+        participants,
+        type: participants.length === 1 ? "single" : "group",
+      };
+      if (conversation.title === autoTitle(conversation.participants))
+        updates.title = autoTitle(participants);
+      await updateConversation(conversationId, updates);
+      results.push({ conversationId, title, status: "updated", changedCount });
+    } catch (error) {
+      results.push({
+        conversationId,
+        title,
+        status: "failed",
+        changedCount: 0,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  notifyDbChange("conversations");
+  return results;
+}
+
 export async function regenerateAssistantMessage(
   conversationId: string,
   activeBranchId: string | null,
@@ -284,6 +360,14 @@ export async function togglePinConversation(conversationId: string): Promise<voi
   const conversation = await getConversation(conversationId);
   if (!conversation) return;
   await updateConversation(conversationId, { pinned: !conversation.pinned });
+  notifyDbChange("conversations");
+}
+
+export async function setConversationArchived(
+  conversationId: string,
+  archived: boolean,
+): Promise<void> {
+  await updateConversation(conversationId, { archived, pinned: archived ? false : undefined });
   notifyDbChange("conversations");
 }
 

@@ -171,6 +171,9 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
         appAlert(t("providerEdit.connectionFailed", { defaultValue: "Connection failed" }));
         return;
       }
+      // A successful explicit connect action makes the provider usable again.
+      await updateProvider(providerId, { enabled: true });
+      setProviderEnabled(true);
 
       setPulling(true);
       const models = await fetchModels(providerId);
@@ -323,7 +326,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
                       }
                       setConnected(null);
                     }}
-                    className="rounded-full px-3 py-1 text-[13px] font-medium transition-colors"
+                    className="rounded-full px-3 py-1 font-medium text-[13px] transition-colors"
                     style={{
                       border: `1px solid ${active ? "var(--primary)" : "var(--border)"}`,
                       backgroundColor: active
@@ -347,7 +350,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
                     <button
                       key={key}
                       onClick={() => applyPreset(key)}
-                      className="rounded-full px-3 py-1 text-[13px] font-medium transition-colors"
+                      className="rounded-full px-3 py-1 font-medium text-[13px] transition-colors"
                       style={{
                         border: `1px solid ${active ? "var(--primary)" : "var(--border)"}`,
                         backgroundColor: active
@@ -387,7 +390,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
         {/* Action Buttons */}
         <div className="mt-4 flex gap-3">
           <button
-            className="flex flex-1 items-center justify-center rounded-xl py-3.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center rounded-xl py-3.5 font-semibold text-[15px] text-white active:opacity-80 disabled:opacity-50"
             disabled={testing || pulling || !name.trim() || !baseUrl.trim()}
             onClick={handleConnect}
             style={{
@@ -416,7 +419,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
           <button
             onClick={handleSave}
             disabled={testing || pulling || !name.trim() || !baseUrl.trim()}
-            className="flex items-center justify-center gap-1 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-50"
+            className="flex items-center justify-center gap-1 rounded-xl px-6 py-3.5 font-semibold text-[15px] text-white active:opacity-80 disabled:opacity-50"
             style={{ backgroundColor: "var(--primary)" }}
           >
             <IoCheckmarkCircle size={20} />
@@ -437,7 +440,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
         {connected && !savedProviderId && testPulledModels.length > 0 && (
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-muted-foreground text-[13px] font-normal tracking-tight uppercase">
+              <span className="font-normal text-[13px] text-muted-foreground uppercase tracking-tight">
                 {t("providerEdit.pulledModels", { count: testPulledModels.length })}
               </span>
               <button
@@ -449,7 +452,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
                     setDisabledTestModels(new Set());
                   }
                 }}
-                className="text-[13px] font-medium active:opacity-60"
+                className="font-medium text-[13px] active:opacity-60"
                 style={{ color: "var(--primary)" }}
               >
                 {testPulledModels.every((m) => !disabledTestModels.has(m.id))
@@ -471,7 +474,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
                   >
                     <div className="min-w-0 flex-1">
                       <p
-                        className={`truncate text-[15px] font-semibold ${enabled ? "text-foreground" : "text-muted-foreground"}`}
+                        className={`truncate font-semibold text-[15px] ${enabled ? "text-foreground" : "text-muted-foreground"}`}
                       >
                         {m.id}
                       </p>
@@ -490,7 +493,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
                         }
                         className="peer sr-only"
                       />
-                      <div className="peer-checked:bg-primary bg-muted-foreground/30 h-6 w-11 rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full" />
+                      <div className="h-6 w-11 rounded-full bg-muted-foreground/30 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full" />
                     </label>
                   </div>
                 );
@@ -502,7 +505,7 @@ export function ProviderEditPage({ editId, onClose }: { editId?: string; onClose
         {/* Security note */}
         <div className="flex items-center justify-center gap-1.5 px-6 pt-10 pb-8">
           <IoLockClosed size={12} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
-          <span className="text-muted-foreground/40 text-[11px]">
+          <span className="text-[11px] text-muted-foreground/40">
             {t("providerEdit.encryption")}
           </span>
         </div>

@@ -63,9 +63,9 @@ export function McpServerCard({
         {/* Name + info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-foreground truncate text-[15px] font-semibold">{server.name}</p>
+            <p className="truncate font-semibold text-[15px] text-foreground">{server.name}</p>
             <span
-              className="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase"
+              className="rounded px-1.5 py-0.5 font-bold font-mono text-[10px] uppercase"
               style={{ backgroundColor: "var(--secondary)", color: "var(--muted-foreground)" }}
             >
               {serverType}
@@ -114,7 +114,7 @@ export function McpServerCard({
         className="flex items-center gap-2 px-4 py-1.5"
         style={{ backgroundColor: "var(--secondary)", borderTop: "0.5px solid var(--border)" }}
       >
-        <span className="text-muted-foreground text-[11px]">{statusText}</span>
+        <span className="text-[11px] text-muted-foreground">{statusText}</span>
       </div>
 
       {/* Tool list (only when connected and has tools) */}
@@ -126,8 +126,8 @@ export function McpServerCard({
               className="px-4 py-2"
               style={{ borderTop: idx > 0 ? "0.5px solid var(--border)" : "none" }}
             >
-              <p className="text-foreground text-[12px] font-medium">{tool.name}</p>
-              <p className="text-muted-foreground text-[11px] leading-relaxed break-words">
+              <p className="font-medium text-[12px] text-foreground">{tool.name}</p>
+              <p className="break-words text-[11px] text-muted-foreground leading-relaxed">
                 {tool.description}
               </p>
             </div>

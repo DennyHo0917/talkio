@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useMobileNav } from "../../contexts/MobileNavContext";
 import {
   IoChevronBack,
-  IoPeopleOutline,
   IoCaretDown,
   IoCaretUp,
   IoPersonOutline,
@@ -35,7 +34,11 @@ import { ModelPicker } from "../shared/ModelPicker";
 import { useChatStore } from "../../stores/chat-store";
 import { useChatPanelState } from "../../hooks/useChatPanelState";
 import type { Identity } from "../../types";
-import { nextReasoningEffort } from "../../types";
+import {
+  getSupportedReasoningEfforts,
+  nextReasoningEffort,
+  reasoningEffortLabel,
+} from "../../types";
 import { MessageStatus } from "../../types";
 import { exportConversationAsMarkdown, exportConversationAsPdf } from "../../services/export";
 import { exportConversationAsImages } from "../../services/export-image";
@@ -89,10 +92,7 @@ export function MobileChatDetail({
     setIsExporting,
     handleModelPickerSelect,
     handleMultiModelSelect,
-    handleAddMembers,
     modelPickerMode,
-    showAddMemberPicker,
-    setShowAddMemberPicker,
     duplicateConversation,
   } = useChatPanelState(conversationId);
 
@@ -361,7 +361,7 @@ export function MobileChatDetail({
                 }
                 if (e.key === "Escape") setIsEditingTitle(false);
               }}
-              className="text-foreground border-primary mx-4 w-full border-b bg-transparent text-center text-sm font-bold outline-none"
+              className="mx-4 w-full border-primary border-b bg-transparent text-center font-bold text-foreground text-sm outline-none"
             />
           </div>
         ) : (
@@ -370,7 +370,7 @@ export function MobileChatDetail({
             style={{ left: 48, right: 48 }}
             onClick={handleHeaderTitlePress}
           >
-            <span className="text-foreground max-w-full truncate text-sm font-bold tracking-tight">
+            <span className="max-w-full truncate font-bold text-foreground text-sm tracking-tight">
               {title}
             </span>
             <div className="mt-0.5 flex max-w-full items-center gap-1">
@@ -385,7 +385,7 @@ export function MobileChatDetail({
               ) : (
                 <IoPersonOutline size={12} color="var(--primary)" className="flex-shrink-0" />
               )}
-              <span className="text-primary truncate text-[10px] font-bold tracking-widest uppercase">
+              <span className="truncate font-bold text-[10px] text-primary uppercase tracking-widest">
                 {subtitle}
               </span>
               {isGroup ? (
@@ -426,7 +426,7 @@ export function MobileChatDetail({
               <line x1="14" y1="10" x2="21" y2="3" />
               <line x1="3" y1="21" x2="10" y2="14" />
             </svg>
-            <span className="text-primary text-[10px] font-medium">{t("chat.compressing")}</span>
+            <span className="font-medium text-[10px] text-primary">{t("chat.compressing")}</span>
           </div>
         )}
         {currentParticipant && !isGroup && (
@@ -441,7 +441,10 @@ export function MobileChatDetail({
               updateParticipantReasoningEffort(
                 conversationId,
                 currentParticipant.id,
-                nextReasoningEffort(currentParticipant.reasoningEffort),
+                nextReasoningEffort(
+                  currentParticipant.reasoningEffort,
+                  getSupportedReasoningEfforts(model),
+                ),
               );
             }}
           >
@@ -452,10 +455,10 @@ export function MobileChatDetail({
               }
             />
             <span
-              className={`text-[9px] font-medium ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
+              className={`font-medium text-[9px] ${currentParticipant.reasoningEffort ? "text-primary" : "text-muted-foreground"}`}
             >
               {currentParticipant.reasoningEffort
-                ? t(`providerEdit.reasoningEffort_${currentParticipant.reasoningEffort}`)
+                ? reasoningEffortLabel(currentParticipant.reasoningEffort)
                 : t("providerEdit.reasoningEffort")}
             </span>
           </button>
@@ -481,7 +484,7 @@ export function MobileChatDetail({
               <line x1="14" y1="10" x2="21" y2="3" />
               <line x1="3" y1="21" x2="10" y2="14" />
             </svg>
-            <span className="text-primary text-[9px] font-medium">{t("chat.compressed")}</span>
+            <span className="font-medium text-[9px] text-primary">{t("chat.compressed")}</span>
           </div>
         )}
 
@@ -514,7 +517,7 @@ export function MobileChatDetail({
                   }}
                 >
                   <Pin size={18} color="var(--foreground)" />
-                  <span className="text-foreground text-[14px]">
+                  <span className="text-[14px] text-foreground">
                     {conv?.pinned ? t("chat.unpinConversation") : t("chat.pinConversation")}
                   </span>
                 </button>
@@ -528,7 +531,7 @@ export function MobileChatDetail({
                     }}
                   >
                     <IoCreateOutline size={18} color="var(--foreground)" />
-                    <span className="text-foreground text-[14px]">{t("chat.rename")}</span>
+                    <span className="text-[14px] text-foreground">{t("chat.rename")}</span>
                   </button>
                 )}
                 <button
@@ -539,7 +542,7 @@ export function MobileChatDetail({
                   }}
                 >
                   <IoPersonAddOutline size={18} color="var(--foreground)" />
-                  <span className="text-foreground text-[14px]">{t("chat.addMember")}</span>
+                  <span className="text-[14px] text-foreground">{t("chat.addMember")}</span>
                 </button>
                 {isGroup && (
                   <button
@@ -551,7 +554,7 @@ export function MobileChatDetail({
                     }}
                   >
                     <IoCopyOutline size={18} color="var(--foreground)" />
-                    <span className="text-foreground text-[14px]">{t("chat.duplicateGroup")}</span>
+                    <span className="text-[14px] text-foreground">{t("chat.duplicateGroup")}</span>
                   </button>
                 )}
                 <button
@@ -564,7 +567,7 @@ export function MobileChatDetail({
                   }}
                 >
                   <IoShareOutline size={18} color="var(--foreground)" />
-                  <span className="text-foreground text-[14px]">{t("chat.export")}</span>
+                  <span className="text-[14px] text-foreground">{t("chat.export")}</span>
                 </button>
                 <button
                   className="flex w-full items-center gap-3 px-4 py-3 active:opacity-60"
@@ -576,7 +579,7 @@ export function MobileChatDetail({
                   }}
                 >
                   <FileDown size={18} color="var(--foreground)" />
-                  <span className="text-foreground text-[14px]">{t("chat.exportPdf")}</span>
+                  <span className="text-[14px] text-foreground">{t("chat.exportPdf")}</span>
                 </button>
                 <button
                   className="flex w-full items-center gap-3 px-4 py-3 active:opacity-60"
@@ -588,7 +591,7 @@ export function MobileChatDetail({
                   }}
                 >
                   <FileImage size={18} color="var(--foreground)" />
-                  <span className="text-foreground text-[14px]">{t("chat.exportImage")}</span>
+                  <span className="text-[14px] text-foreground">{t("chat.exportImage")}</span>
                 </button>
                 <button
                   className="flex w-full items-center gap-3 px-4 py-3 active:opacity-60"
@@ -614,7 +617,7 @@ export function MobileChatDetail({
                     <line x1="14" y1="10" x2="21" y2="3" />
                     <line x1="3" y1="21" x2="10" y2="14" />
                   </svg>
-                  <span className="text-foreground text-[14px]">
+                  <span className="text-[14px] text-foreground">
                     {isCompressing
                       ? t("chat.compressing")
                       : hasManualSummary
@@ -659,12 +662,12 @@ export function MobileChatDetail({
             className="mb-2 flex items-center gap-2 pb-2"
             style={{ borderBottom: "0.5px solid var(--border)" }}
           >
-            <span className="text-muted-foreground text-[11px] font-medium">
+            <span className="font-medium text-[11px] text-muted-foreground">
               {t("chat.speakingOrder")}
             </span>
             <div className="flex-1" />
             <button
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium active:opacity-60 ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-[11px] active:opacity-60 ${
                 (conv.speakingOrder ?? "sequential") === "sequential"
                   ? "text-primary"
                   : "text-muted-foreground"
@@ -681,7 +684,7 @@ export function MobileChatDetail({
               {t("chat.sequential")}
             </button>
             <button
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium active:opacity-60 ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-[11px] active:opacity-60 ${
                 conv.speakingOrder === "random" ? "text-primary" : "text-muted-foreground"
               }`}
               style={
@@ -694,7 +697,7 @@ export function MobileChatDetail({
               {t("chat.random")}
             </button>
             <button
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium active:opacity-60 ${
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 font-medium text-[11px] active:opacity-60 ${
                 conv.speakingOrder === "parallel" ? "text-primary" : "text-muted-foreground"
               }`}
               style={
@@ -710,9 +713,9 @@ export function MobileChatDetail({
             </button>
           </div>
           {/* Group system prompt */}
-          <div className="border-border mb-2 border-b pb-2">
+          <div className="mb-2 border-border border-b pb-2">
             <MentionTextarea
-              className="text-foreground placeholder:text-muted-foreground w-full resize-none rounded-lg border-0 bg-transparent px-0 py-1 text-xs leading-relaxed outline-none"
+              className="w-full resize-none rounded-lg border-0 bg-transparent px-0 py-1 text-foreground text-xs leading-relaxed outline-none placeholder:text-muted-foreground"
               rows={2}
               placeholder={t("chat.groupPromptPlaceholder")}
               mentions={participantMentions}
@@ -747,7 +750,10 @@ export function MobileChatDetail({
               updateParticipantReasoningEffort(
                 conversationId,
                 pid,
-                nextReasoningEffort(p.reasoningEffort),
+                nextReasoningEffort(
+                  p.reasoningEffort,
+                  getSupportedReasoningEfforts(getModelById(p.modelId)),
+                ),
               );
             }}
           />
@@ -757,7 +763,7 @@ export function MobileChatDetail({
             onClick={() => mobileNav?.pushAddMember(conversationId)}
           >
             <IoAddCircleOutline size={18} color="var(--primary)" />
-            <span className="text-primary text-[13px] font-medium">{t("chat.addMember")}</span>
+            <span className="font-medium text-[13px] text-primary">{t("chat.addMember")}</span>
           </button>
         </div>
       )}
@@ -785,10 +791,10 @@ export function MobileChatDetail({
               <IoPersonOutline size={16} color="var(--muted-foreground)" />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-foreground text-[14px] font-medium">{t("chat.noIdentity")}</p>
+              <p className="font-medium text-[14px] text-foreground">{t("chat.noIdentity")}</p>
             </div>
             {!identityPanelIdentityId && (
-              <span className="text-primary text-xs font-semibold">✓</span>
+              <span className="font-semibold text-primary text-xs">✓</span>
             )}
           </button>
           {identities.map((identity: Identity) => (
@@ -802,18 +808,18 @@ export function MobileChatDetail({
                 className="flex h-8 w-8 items-center justify-center rounded-full text-sm"
                 style={{ backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)" }}
               >
-                <span className="text-primary font-bold">{identity.name.slice(0, 1)}</span>
+                <span className="font-bold text-primary">{identity.name.slice(0, 1)}</span>
               </div>
               <div className="min-w-0 flex-1 text-left">
-                <p className="text-foreground truncate text-[14px] font-medium">{identity.name}</p>
+                <p className="truncate font-medium text-[14px] text-foreground">{identity.name}</p>
                 {identity.systemPrompt && (
-                  <p className="text-muted-foreground truncate text-[12px]">
+                  <p className="truncate text-[12px] text-muted-foreground">
                     {identity.systemPrompt.slice(0, 60)}
                   </p>
                 )}
               </div>
               {identityPanelIdentityId === identity.id && (
-                <span className="text-primary text-xs font-semibold">✓</span>
+                <span className="font-semibold text-primary text-xs">✓</span>
               )}
             </button>
           ))}
@@ -845,6 +851,7 @@ export function MobileChatDetail({
         onSelect={handleModelPickerSelect}
         multiSelect={modelPickerMode === "add"}
         onMultiSelect={handleMultiModelSelect}
+        includeImageModels={modelPickerMode !== "add"}
       />
 
       {/* Messages + Input */}
@@ -885,7 +892,7 @@ export function MobileChatDetail({
             }}
           >
             <AlertTriangle size={13} color="var(--destructive)" />
-            <span className="text-[12px] font-medium" style={{ color: "var(--destructive)" }}>
+            <span className="font-medium text-[12px]" style={{ color: "var(--destructive)" }}>
               {t("chat.errorCount", { count: errorMessageIds.length })}
             </span>
             <div className="flex items-center gap-0.5">

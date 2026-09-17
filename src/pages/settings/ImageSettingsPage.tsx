@@ -1,271 +1,185 @@
-/**
- * ImageSettingsPage — image endpoint backing the generate_image tool.
- * Same shape as SttSettingsPage: connect, pick a model, auto-save.
- */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  IoLinkOutline,
-  IoKeyOutline,
-  IoEyeOutline,
-  IoEyeOffOutline,
-  IoRefreshOutline,
-  IoSearchOutline,
-  IoCloseCircle,
-  IoCheckmarkCircle,
-} from "../../icons";
+import { Check, Image as ImageIcon, Plus, X } from "lucide-react";
+import { useProviderStore } from "../../stores/provider-store";
 import { useSettingsStore } from "../../stores/settings-store";
-import { appFetch } from "../../lib/http";
+import { getAvailableImageModels } from "../../services/image-generation";
+import { inferImageGenerationApi } from "../../services/image-model";
+import { setModelOverride } from "../../services/provider-profiles/model-catalog";
+import type { Model } from "../../types";
 
 export function ImageSettingsPage() {
   const { t } = useTranslation();
-  const settings = useSettingsStore((s) => s.settings);
-  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const providers = useProviderStore((state) => state.providers);
+  const models = useProviderStore((state) => state.models);
+  const settings = useSettingsStore((state) => state.settings);
+  const updateSettings = useSettingsStore((state) => state.updateSettings);
+  const addModelById = useProviderStore((state) => state.addModelById);
+  const updateModel = useProviderStore((state) => state.updateModel);
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [providerId, setProviderId] = useState("");
+  const [modelId, setModelId] = useState("");
 
-  const [baseUrl, setBaseUrl] = useState(settings.imageBaseUrl);
-  const [apiKey, setApiKey] = useState(settings.imageApiKey);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [model, setModel] = useState(settings.imageModel);
-  const [modelSearch, setModelSearch] = useState("");
-  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
-  const [connected, setConnected] = useState<boolean | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [pulling, setPulling] = useState(false);
-  const didAutoFetch = useRef(false);
+  const imageModels = useMemo(() => getAvailableImageModels(), [models, providers]);
+  const compatibleProviders = useMemo(
+    () =>
+      providers.filter(
+        (provider) =>
+          provider.enabled !== false && inferImageGenerationApi(provider, ["image"]) !== undefined,
+      ),
+    [providers],
+  );
+  const selectedProviderId = compatibleProviders.some((provider) => provider.id === providerId)
+    ? providerId
+    : (compatibleProviders[0]?.id ?? "");
 
-  const doFetch = useCallback(async (url: string, key: string) => {
-    const endpoint = url.replace(/\/+$/, "") + "/models";
-    const res = await appFetch(endpoint, {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) throw new Error("Connection failed");
-    const data = await res.json();
-    return ((data.data ?? []) as Array<{ id: string }>).map((m) => m.id).sort();
-  }, []);
+  const selectedId = imageModels.some((model) => model.id === settings.defaultImageModelId)
+    ? settings.defaultImageModelId
+    : (imageModels[0]?.id ?? "");
 
-  // Auto-fetch models on mount when already configured
   useEffect(() => {
-    if (didAutoFetch.current) return;
-    if (!settings.imageBaseUrl || !settings.imageApiKey) return;
-    didAutoFetch.current = true;
-
-    (async () => {
-      setPulling(true);
-      try {
-        setFetchedModels(await doFetch(settings.imageBaseUrl, settings.imageApiKey));
-        setConnected(true);
-      } catch {
-        setConnected(null);
-      } finally {
-        setPulling(false);
-      }
-    })();
-  }, [settings.imageBaseUrl, settings.imageApiKey, doFetch]);
-
-  const handleConnect = async () => {
-    if (!baseUrl.trim() || !apiKey.trim()) return;
-    setTesting(true);
-    setConnected(null);
-
-    try {
-      const ids = await doFetch(baseUrl.trim(), apiKey.trim());
-      setConnected(true);
-      setFetchedModels(ids);
-
-      const selectedModel = ids.includes(model) ? model : (ids[0] ?? model);
-      setModel(selectedModel);
-      updateSettings({
-        imageBaseUrl: baseUrl.trim(),
-        imageApiKey: apiKey.trim(),
-        imageModel: selectedModel,
-      });
-    } catch {
-      setConnected(false);
-    } finally {
-      setTesting(false);
+    if (selectedId !== settings.defaultImageModelId) {
+      updateSettings({ defaultImageModelId: selectedId });
     }
-  };
+  }, [selectedId, settings.defaultImageModelId, updateSettings]);
 
-  const handleSelectModel = (id: string) => {
-    setModel(id);
-    updateSettings({ imageBaseUrl: baseUrl.trim(), imageApiKey: apiKey.trim(), imageModel: id });
-  };
+  const handleAddModel = () => {
+    const trimmedModelId = modelId.trim();
+    const provider = compatibleProviders.find((item) => item.id === selectedProviderId);
+    if (!provider || !trimmedModelId) return;
 
-  const handleBaseUrlChange = (value: string) => {
-    setBaseUrl(value);
-    if (value.trim() !== settings.imageBaseUrl) {
-      setConnected(null);
-      setFetchedModels([]);
+    const model = addModelById(provider.id, trimmedModelId);
+    const catalogImageModel =
+      model.metadataSource === "models.dev" && model.outputModalities.includes("image");
+    const outputModalities: Model["outputModalities"] = catalogImageModel
+      ? model.outputModalities
+      : ["image"];
+    const imageGenerationApi = inferImageGenerationApi(provider, outputModalities);
+    if (!imageGenerationApi) return;
+
+    if (
+      model.outputModalities.length !== outputModalities.length ||
+      model.outputModalities.some((modality, index) => modality !== outputModalities[index])
+    ) {
+      setModelOverride(provider.profileId ?? provider.id, model.modelId, { outputModalities });
     }
+    updateModel(model.id, {
+      outputModalities: [...outputModalities],
+      imageGenerationApi,
+      metadataSource: catalogImageModel ? model.metadataSource : "manual",
+      enabled: true,
+    });
+    updateSettings({ defaultImageModelId: model.id });
+    setModelId("");
+    setShowAddModel(false);
   };
-
-  const handleApiKeyChange = (value: string) => {
-    setApiKey(value);
-    if (value.trim() !== settings.imageApiKey) {
-      setConnected(null);
-      setFetchedModels([]);
-    }
-  };
-
-  const displayModels = modelSearch
-    ? fetchedModels.filter((id) => id.toLowerCase().includes(modelSearch.toLowerCase()))
-    : fetchedModels;
 
   return (
     <div className="h-full overflow-y-auto" style={{ backgroundColor: "var(--secondary)" }}>
-      <div className="mx-auto max-w-lg space-y-3 px-4 pt-4 pb-10">
-        <p className="text-muted-foreground px-1 text-[13px] leading-relaxed">
-          {t("settings.imageHint")}
-        </p>
-
-        {/* Base URL */}
-        <div className="overflow-hidden rounded-xl" style={{ backgroundColor: "var(--card)" }}>
-          <div className="flex items-center px-4 py-3.5">
-            <IoLinkOutline
-              size={18}
-              color="var(--muted-foreground)"
-              className="mr-3 flex-shrink-0"
-            />
-            <input
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
-              value={baseUrl}
-              onChange={(e) => handleBaseUrlChange(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-            />
-          </div>
+      <div className="mx-auto max-w-lg px-4 pt-4 pb-10">
+        <div className="mb-3 flex items-center justify-between px-1 text-[13px] text-muted-foreground">
+          <span>{t("settings.defaultImageModel")}</span>
+          <span>{t("settings.imageModelsCount", { count: imageModels.length })}</span>
         </div>
 
-        {/* API Key */}
-        <div className="overflow-hidden rounded-xl" style={{ backgroundColor: "var(--card)" }}>
-          <div className="flex items-center px-4 py-3.5">
-            <IoKeyOutline
-              size={18}
-              color="var(--muted-foreground)"
-              className="mr-3 flex-shrink-0"
-            />
-            <input
-              type={showApiKey ? "text" : "password"}
-              className="text-foreground flex-1 bg-transparent text-[16px] outline-none"
-              value={apiKey}
-              onChange={(e) => handleApiKeyChange(e.target.value)}
-              placeholder={t("settings.sttApiKeyPlaceholder")}
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="ml-2 p-1 active:opacity-60"
-            >
-              {showApiKey ? (
-                <IoEyeOffOutline size={20} color="var(--muted-foreground)" />
-              ) : (
-                <IoEyeOutline size={20} color="var(--muted-foreground)" />
-              )}
-            </button>
+        {imageModels.length === 0 ? (
+          <div className="flex flex-col items-center py-16 text-center">
+            <ImageIcon size={30} className="text-muted-foreground/40" />
+            <p className="mt-3 text-muted-foreground text-sm">{t("settings.imageNotConfigured")}</p>
           </div>
-        </div>
-
-        {/* Current model */}
-        {settings.imageModel && settings.imageApiKey && (
-          <div
-            className="flex items-center gap-2 rounded-xl px-4 py-3"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--success) 8%, var(--card))",
-              border: "1px solid color-mix(in srgb, var(--success) 25%, transparent)",
-            }}
-          >
-            <IoCheckmarkCircle size={18} color="var(--success)" className="flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-muted-foreground text-[12px]">{t("settings.currentModel")}</p>
-              <p className="text-foreground truncate text-[15px] font-semibold">
-                {settings.imageModel}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Connect */}
-        <button
-          className="mt-1 w-full rounded-xl py-3.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-50"
-          disabled={testing || pulling || !baseUrl.trim() || !apiKey.trim()}
-          onClick={handleConnect}
-          style={{
-            backgroundColor:
-              connected === true
-                ? "var(--success)"
-                : connected === false
-                  ? "var(--destructive)"
-                  : "var(--primary)",
-          }}
-        >
-          {testing || pulling
-            ? pulling
-              ? t("providerEdit.fetchingModels")
-              : t("providerEdit.connecting")
-            : connected === true
-              ? `✓ ${t("providerEdit.connected")}`
-              : connected === false
-                ? t("providerEdit.retryConnection")
-                : t("providerEdit.connectAndFetch")}
-        </button>
-
-        {/* Model list */}
-        {(connected || displayModels.length > 0) && fetchedModels.length > 0 && (
-          <div className="mt-6">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <span className="text-muted-foreground text-[13px] font-normal tracking-tight uppercase">
-                {t("settings.models")} ({displayModels.length})
-              </span>
-              <button
-                onClick={handleConnect}
-                disabled={pulling}
-                className="flex items-center gap-1 text-[13px] font-medium active:opacity-60"
-                style={{ color: "var(--primary)" }}
-              >
-                <IoRefreshOutline size={14} color="var(--primary)" />
-                {t("providerEdit.refresh")}
-              </button>
-            </div>
-
-            {fetchedModels.length > 5 && (
-              <div
-                className="mb-3 flex items-center rounded-xl px-3 py-2"
-                style={{ backgroundColor: "var(--card)" }}
-              >
-                <IoSearchOutline size={16} color="var(--muted-foreground)" className="mr-2" />
-                <input
-                  className="text-foreground flex-1 bg-transparent text-[14px] outline-none"
-                  value={modelSearch}
-                  onChange={(e) => setModelSearch(e.target.value)}
-                  placeholder={t("providerEdit.searchModels")}
-                />
-                {modelSearch && (
-                  <button onClick={() => setModelSearch("")} className="active:opacity-60">
-                    <IoCloseCircle size={16} color="var(--muted-foreground)" />
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="overflow-hidden rounded-xl" style={{ backgroundColor: "var(--card)" }}>
-              {displayModels.map((id: string, idx: number) => (
+        ) : (
+          <div className="overflow-hidden rounded-lg" style={{ backgroundColor: "var(--card)" }}>
+            {imageModels.map((model, index) => {
+              const selected = model.id === selectedId;
+              return (
                 <button
-                  key={id}
-                  onClick={() => handleSelectModel(id)}
-                  className="flex w-full items-center justify-between px-4 py-3.5 transition-colors active:bg-black/5"
+                  key={model.id}
+                  onClick={() => updateSettings({ defaultImageModelId: model.id })}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5"
                   style={{
                     borderBottom:
-                      idx < displayModels.length - 1 ? "0.5px solid var(--border)" : "none",
+                      index < imageModels.length - 1 ? "0.5px solid var(--border)" : "none",
                   }}
                 >
-                  <span className="text-foreground flex-1 truncate text-left text-[15px]">
-                    {id}
-                  </span>
-                  {model === id && <IoCheckmarkCircle size={20} color="var(--primary)" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-[15px] text-foreground">
+                      {model.displayName}
+                    </p>
+                    <p className="truncate text-[12px] text-muted-foreground">
+                      {model.providerName} · {model.modelId}
+                    </p>
+                  </div>
+                  <div className="h-5 w-5 flex-shrink-0">
+                    {selected ? <Check size={20} color="var(--primary)" /> : null}
+                  </div>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
+
+        <div className="mt-3">
+          {showAddModel ? (
+            <div
+              className="space-y-3 rounded-lg p-3"
+              style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-foreground text-sm">
+                  {t("settings.addImageModel")}
+                </span>
+                <button
+                  onClick={() => setShowAddModel(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md active:opacity-60"
+                  title={t("common.cancel")}
+                >
+                  <X size={16} color="var(--muted-foreground)" />
+                </button>
+              </div>
+              <select
+                value={selectedProviderId}
+                onChange={(event) => setProviderId(event.target.value)}
+                className="w-full rounded-md px-3 py-2.5 text-foreground text-sm outline-none"
+                style={{ backgroundColor: "var(--muted)" }}
+                aria-label={t("settings.imageModelProvider")}
+              >
+                {compatibleProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={modelId}
+                onChange={(event) => setModelId(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleAddModel();
+                }}
+                className="w-full rounded-md px-3 py-2.5 text-foreground text-sm outline-none"
+                style={{ backgroundColor: "var(--muted)" }}
+                placeholder="Model ID"
+                aria-label="Model ID"
+              />
+              <button
+                onClick={handleAddModel}
+                disabled={!selectedProviderId || !modelId.trim()}
+                className="w-full rounded-md bg-primary py-2.5 font-medium text-sm text-white active:opacity-70 disabled:opacity-40"
+              >
+                {t("common.add")}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddModel(true)}
+              disabled={compatibleProviders.length === 0}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md py-2.5 font-medium text-primary text-sm active:opacity-70 disabled:opacity-40"
+              style={{ backgroundColor: "var(--card)", border: "0.5px solid var(--border)" }}
+            >
+              <Plus size={16} />
+              {t("settings.addImageModel")}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

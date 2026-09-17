@@ -22,7 +22,10 @@
     "add": "添加",
     "success": "成功",
     "selected": "已选",
-    "remove": "移除"
+    "remove": "移除",
+    "next": "下一步",
+    "back": "返回",
+    "processing": "处理中..."
   },
   "tabs": {
     "chats": "聊天",
@@ -43,6 +46,9 @@
     "filterAll": "全部",
     "filterSingle": "单聊",
     "filterGroups": "群聊",
+    "archived": "已归档",
+    "activeConversations": "当前会话",
+    "noArchived": "暂无归档会话",
     "noConversations": "暂无对话",
     "goToModels": "前往模型页面开始聊天",
     "startConversation": "开始新对话",
@@ -51,6 +57,21 @@
     "reasoning": "推理",
     "vision": "视觉",
     "noResults": "没有匹配的对话"
+  },
+  "batchMembers": {
+    "title": "批量管理群成员",
+    "add": "添加成员",
+    "remove": "移除成员",
+    "noGroups": "暂无可管理的群聊",
+    "preview": "查看变更预览",
+    "previewSummary": "目标群聊 {{groups}} 个，选择成员 {{members}} 个",
+    "addCount": "将添加 {{count}} 个",
+    "removeCount": "将移除 {{count}} 个",
+    "updatedCount": "已变更 {{count}} 个成员",
+    "noChange": "无变更（成员已存在或不存在）",
+    "conversationMissing": "群聊已不存在",
+    "notGroup": "会话已不再是群聊",
+    "generationInProgress": "群聊正在生成回复，请停止后再修改成员"
   },
   "chat": {
     "you": "你",
@@ -81,7 +102,7 @@
       "rate-limit": "已达到供应商限流，请稍后重试。",
       "invalid-request": "供应商拒绝了请求，请检查模型和供应商配置。",
       "api": "供应商服务暂时不可用，请稍后重试。",
-      "tool": "工具调用失败，请检查工具结果或审批设置。",
+      "tool": "工具调用失败，请检查工具结果。",
       "unknown": "生成失败，请检查网络连接或供应商状态。"
     },
     "compressContext": "压缩上下文",
@@ -112,6 +133,8 @@
     "translate": "翻译",
     "summarize": "总结",
     "rename": "重命名",
+    "archiveConversation": "归档会话",
+    "restoreConversation": "恢复会话",
     "addMember": "添加成员",
     "duplicateGroup": "复制当前群组",
     "selectRole": "选择角色",
@@ -183,7 +206,10 @@
     "generatedFile": "生成内容",
     "overwrite": "覆盖",
     "create": "新建",
-    "generatedImage": "生成的图片"
+    "generatedImage": "生成的图片",
+    "generatingImage": "正在生成图片…",
+    "cancelled": "已取消",
+    "imageModelAttachments": "当前生图模型暂不支持附件。"
   },
   "models": {
     "title": "模型",
@@ -193,7 +219,8 @@
     "selectModels": "选择模型",
     "selectModelsHint": "至少选择 2 个模型以创建群聊。",
     "createGroup": "创建群聊 ({{count}})",
-    "manage": "管理"
+    "manage": "管理",
+    "imageModel": "生图模型"
   },
   "personas": {
     "searchIdentities": "搜索角色...",
@@ -243,6 +270,10 @@
     "updateCheckFailed": "检查更新失败",
     "imageNotConfigured": "未配置",
     "imageHint": "配置一个 OpenAI 兼容的 /images/generations 端点后，模型即可通过 generate_image 工具作图。",
+    "defaultImageModel": "默认图片模型",
+    "imageModelsCount": "{{count}} 个可用",
+    "addImageModel": "添加图片模型",
+    "imageModelProvider": "图片模型供应商",
     "sttNotConfigured": "未配置",
     "currentModel": "当前模型",
     "sttPresets": "快速配置",
@@ -305,12 +336,7 @@
     "compressionThreshold": "触发阈值",
     "workspaceDir": "工作目录",
     "selectDir": "选择",
-    "changeDir": "更改",
-    "toolApproval": "工具调用确认",
-    "toolApprovalAuto": "自动执行",
-    "toolApprovalAsk": "每次询问",
-    "toolApprovalAutoHint": "包括 edit_workspace_file 等写入工具会直接执行",
-    "toolApprovalAskHint": "包括 edit_workspace_file 等写入工具每次都会先询问"
+    "changeDir": "更改"
   },
   "providerEdit": {
     "quickSelect": "快速选择",
@@ -339,6 +365,7 @@
     "tools": "工具",
     "reasoning": "推理",
     "probe": "探测",
+    "probeFailed": "模型能力探测失败",
     "type": "类型",
     "enabled": "启用",
     "customHeaders": "自定义请求头",
@@ -371,7 +398,17 @@
     "reasoningEffort_low": "低",
     "reasoningEffort_medium": "中",
     "reasoningEffort_high": "高",
-    "reasoningEffort_xhigh": "最高"
+    "reasoningEffort_xhigh": "最高",
+    "reasoningEffort_max": "极限",
+    "contextWindow": "上下文 {{value}}",
+    "maxOutputTokens": "最大输出 {{value}}",
+    "reasoningLevels": "推理档位 {{value}}",
+    "reasoningBudget": "预算 {{value}} tokens",
+    "metadataSource_manual": "手动配置",
+    "metadataSource_models_dev": "models.dev",
+    "metadataSource_provider": "供应商 API",
+    "metadataSource_probe": "实时探测",
+    "metadataSource_default": "默认值"
   },
   "providers": {
     "deleteProvider": "删除供应商",
@@ -525,12 +562,6 @@
       "name": "胡说教授",
       "prompt": "你是一个极度自信的教授，专门一本正经地胡说八道。引用根本不存在的研究，捏造统计数据，提及虚构的专家。用极其学术和严肃的语气说出荒谬至极的内容。永远不要打破人设，也不要承认自己在瞎编。"
     }
-  },
-  "toolApproval": {
-    "title": "工具调用需要确认",
-    "description": "AI 想要调用工具，请审阅请求后决定。",
-    "approve": "允许",
-    "reject": "拒绝"
   },
   "tray": {
     "show": "显示主窗口",

@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMobileNav } from "../../contexts/MobileNavContext";
 import { useProviderStore } from "../../stores/provider-store";
+import { getDefaultImageModel } from "../../services/image-generation";
 import { useSettingsStore, type AppSettings } from "../../stores/settings-store";
 import { SettingsRow, SectionHeader } from "../../pages/settings/SettingsPage";
 import { createBackup, downloadBackup, pickAndImportBackup } from "../../services/backup";
@@ -26,6 +28,7 @@ export function SettingsMainContent() {
   const { prompt: promptBackupSecrets, dialog: backupSecretsDialog } = useBackupSecretsChoice();
   const mobileNav = useMobileNav();
   const providers = useProviderStore((s) => s.providers);
+  const models = useProviderStore((s) => s.models);
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
@@ -41,13 +44,17 @@ export function SettingsMainContent() {
       : settings.language === "en"
         ? t("settings.langEn")
         : t("settings.langSystem");
+  const defaultImageModel = useMemo(
+    () => getDefaultImageModel(),
+    [models, providers, settings.defaultImageModelId],
+  );
 
   return (
     <div className="h-full overflow-y-auto" style={{ backgroundColor: "var(--background)" }}>
       {backupSecretsDialog}
       {/* iOS Large Title */}
       <div className="px-4 pt-2 pb-2">
-        <h1 className="text-foreground text-[20px] font-bold tracking-tight">
+        <h1 className="font-bold text-[20px] text-foreground tracking-tight">
           {t("settings.title")}
         </h1>
       </div>
@@ -83,7 +90,7 @@ export function SettingsMainContent() {
           iconColor="#ec4899"
           iconBg="rgba(236,72,153,0.1)"
           label={t("settings.imageProvider")}
-          detail={settings.imageApiKey ? settings.imageModel : t("settings.imageNotConfigured")}
+          detail={defaultImageModel?.displayName ?? t("settings.imageNotConfigured")}
           onPress={() => mobileNav?.pushSettingsImage()}
         />
         <SettingsRow
@@ -107,7 +114,7 @@ export function SettingsMainContent() {
             <Minimize2 size={18} color="#10b981" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="text-foreground text-[16px] font-medium">
+            <span className="font-medium text-[16px] text-foreground">
               {t("settings.contextCompression")}
             </span>
           </div>
@@ -117,7 +124,7 @@ export function SettingsMainContent() {
               onChange={(e) =>
                 updateSettings({ contextCompressionThreshold: Number(e.target.value) })
               }
-              className="text-muted-foreground flex-shrink-0 cursor-pointer appearance-none rounded-lg px-2 py-1 text-[13px] outline-none"
+              className="flex-shrink-0 cursor-pointer appearance-none rounded-lg px-2 py-1 text-[13px] text-muted-foreground outline-none"
               style={{ backgroundColor: "var(--secondary)" }}
             >
               <option value={8000}>8K</option>
@@ -221,8 +228,8 @@ export function SettingsMainContent() {
             const result = await pickAndImportBackup();
             if (!result) return;
             if (result.success) {
-              useProviderStore.getState().loadFromStorage();
               useSettingsStore.getState().loadFromStorage();
+              useProviderStore.getState().loadFromStorage();
               await appAlert(t("settings.importSuccess", result.counts!));
               window.location.reload();
             } else {
@@ -246,15 +253,15 @@ export function SettingsMainContent() {
             border: "1px solid color-mix(in srgb, var(--primary) 10%, transparent)",
           }}
         >
-          <p className="text-muted-foreground text-center text-xs leading-relaxed">
+          <p className="text-center text-muted-foreground text-xs leading-relaxed">
             {t("settings.securityTip")}
           </p>
         </div>
         <div className="pb-6 text-center">
-          <p className="text-muted-foreground text-[10px] font-medium tracking-widest uppercase">
+          <p className="font-medium text-[10px] text-muted-foreground uppercase tracking-widest">
             Talkio
           </p>
-          <p className="text-muted-foreground mt-1 text-xs">v{__APP_VERSION__}</p>
+          <p className="mt-1 text-muted-foreground text-xs">v{__APP_VERSION__}</p>
         </div>
       </div>
     </div>

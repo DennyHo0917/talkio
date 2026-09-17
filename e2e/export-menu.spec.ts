@@ -10,6 +10,7 @@ test.beforeEach(async ({ page }) => {
 async function seedConversation(page: Page) {
   await page.evaluate(async () => {
     const database = await import("/src/storage/database.ts");
+    await database.initDatabase();
     const { notifyDbChange } = await import("/src/hooks/useDatabase.ts");
     await database.insertConversation({
       id: "export-ui-test",

@@ -1,5 +1,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, type DirEntry } from "@tauri-apps/plugin-fs";
+import ignore from "ignore";
+import { diff_match_patch } from "diff-match-patch";
+import { normalizeRelativePath } from "../lib/path-utils";
 
 const DEFAULT_MAX_ENTRIES = 300;
 const DEFAULT_MAX_DEPTH = 3;
@@ -107,11 +110,11 @@ function getRelativePath(root: string, fullPath: string): string {
 }
 
 export function sanitizeRelativePath(relativePath: string): string | null {
-  let p = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-  const parts = p.split("/").filter((part) => part && part !== "." && part !== "..");
-  if (parts.length === 0) return null;
+  const normalized = normalizeRelativePath(relativePath);
+  if (!normalized) return null;
+  const parts = normalized.split("/");
   if (parts.some((part) => shouldIgnoreName(part))) return null;
-  return parts.join("/");
+  return normalized;
 }
 
 export async function readWorkspaceTree(
@@ -124,6 +127,12 @@ export async function readWorkspaceTree(
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
   const lines: string[] = [];
   let truncated = false;
+  const gitignore = ignore();
+  try {
+    gitignore.add(await readTextFile(joinPath(workspaceDir, ".gitignore")));
+  } catch {
+    // A missing .gitignore is valid.
+  }
 
   async function walk(dir: string, depth: number) {
     if (lines.length >= maxEntries || depth > maxDepth) {
@@ -131,7 +140,7 @@ export async function readWorkspaceTree(
       return;
     }
 
-    let entries;
+    let entries: DirEntry[];
     try {
       entries = await readDir(dir);
     } catch {
@@ -149,6 +158,7 @@ export async function readWorkspaceTree(
       const name = entry.name ?? "";
       const fullPath = joinPath(dir, name);
       const relativePath = getRelativePath(workspaceDir, fullPath);
+      if (gitignore.ignores(relativePath)) continue;
       const indent = "  ".repeat(depth);
       lines.push(
         `${indent}${entry.isDirectory ? "📁" : "📄"} ${relativePath}${entry.isDirectory ? "/" : ""}`,
@@ -274,9 +284,28 @@ export async function editWorkspaceFile(
     return { path: safePath, applied: false, error: "File not found or unreadable" };
   }
 
-  // Exact match
+  // Exact match first, then use diff-match-patch for small whitespace/context drift.
   const idx = fileContent.indexOf(oldContent);
   if (idx === -1) {
+    const dmp = new diff_match_patch();
+    let fuzzyIndex = -1;
+    try {
+      // diff-match-patch's Bitap matcher rejects patterns longer than 32
+      // characters; let the existing line-based fallback handle those.
+      if (oldContent.length <= 32) fuzzyIndex = dmp.match_main(fileContent, oldContent, 0);
+    } catch {
+      fuzzyIndex = -1;
+    }
+    if (fuzzyIndex >= 0) {
+      const [patched, applied] = dmp.patch_apply(
+        dmp.patch_make(oldContent, newContent),
+        fileContent.slice(fuzzyIndex),
+      );
+      if (applied.every(Boolean)) {
+        await writeTextFile(fullPath, fileContent.slice(0, fuzzyIndex) + patched);
+        return { path: safePath, applied: true };
+      }
+    }
     // Fallback: trimmed-whitespace match per line
     const oldLines = oldContent.split("\n").map((l) => l.trimEnd());
     const fileLines = fileContent.split("\n");
@@ -403,7 +432,7 @@ export async function searchWorkspaceFiles(
 
   async function walk(dir: string, depth: number) {
     if (results.length >= maxResults || depth > maxDepth) return;
-    let entries;
+    let entries: DirEntry[];
     try {
       entries = await readDir(dir);
     } catch {

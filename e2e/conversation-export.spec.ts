@@ -59,7 +59,7 @@ test("long image export produces a non-blank PNG with rendered Markdown", async 
   }, baseMessage);
 
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("Export_Test.png");
+  expect(download.suggestedFilename()).toBe("Export Test.png");
   const path = await download.path();
   expect(path).not.toBeNull();
   const image = sharp(path!);
@@ -103,6 +103,6 @@ test("very long conversations are exported as numbered PNG slices", async ({ pag
 
   expect(pageCount).toBeGreaterThan(1);
   await expect.poll(() => downloads.length).toBe(pageCount);
-  expect(downloads[0]).toBe("Long_Export-01.png");
-  expect(downloads.at(-1)).toBe(`Long_Export-${String(pageCount).padStart(2, "0")}.png`);
+  expect(downloads[0]).toBe("Long Export-01.png");
+  expect(downloads.at(-1)).toBe(`Long Export-${String(pageCount).padStart(2, "0")}.png`);
 });

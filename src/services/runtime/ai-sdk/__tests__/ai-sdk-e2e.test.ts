@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { AISdkRuntime } from "../ai-sdk-runtime";
+import { AISdkRuntime, getLanguageModel } from "../ai-sdk-runtime";
 import type { GenerationEvent } from "../../events";
 import type { ParticipantRequest } from "../../types";
 
@@ -24,6 +24,33 @@ function openaiSseResponse(): Response {
     new ReadableStream<Uint8Array>({
       start(controller) {
         for (const c of chunks) controller.enqueue(encoder.encode(c));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "text/event-stream" } },
+  );
+}
+
+function taggedReasoningResponse(tag: string): Response {
+  const content = [`<${tag.slice(0, 2)}`, `${tag.slice(2)}>hidden</${tag}>visible`];
+  const chunks = [
+    ...content.map(
+      (text) =>
+        `data: ${JSON.stringify({
+          id: "reasoning-1",
+          object: "chat.completion.chunk",
+          created: 1,
+          model: "reasoning-model",
+          choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
+        })}\n\n`,
+    ),
+    'data: {"id":"reasoning-1","object":"chat.completion.chunk","created":1,"model":"reasoning-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n',
+    "data: [DONE]\n\n",
+  ];
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
         controller.close();
       },
     }),
@@ -58,13 +85,7 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
   it("streams text, thinking, incremental tool args and usage from a real OpenAI-compatible SSE stream", async () => {
     mockFetch.mockResolvedValue(openaiSseResponse());
 
-    const runtime = new AISdkRuntime((req) =>
-      createOpenAI({
-        apiKey: "sk-test",
-        baseURL: req.baseUrl,
-        fetch: mockFetch as unknown as typeof fetch,
-      }).chat(req.modelId),
-    );
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
 
     const events = await collect(runtime.run(makeRequest()));
 
@@ -73,6 +94,9 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
     const [url, init] = mockFetch.mock.calls[0];
     expect(String(url)).toBe("https://api.example.com/v1/chat/completions");
     expect((init as RequestInit).headers).toMatchObject({ authorization: "Bearer sk-test" });
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+      stream_options: { include_usage: true },
+    });
 
     const text = events
       .filter((e) => e.type === "text-delta")
@@ -96,6 +120,62 @@ describe("AISdkRuntime end-to-end (real AI SDK + mocked transport)", () => {
     expect(events).toContainEqual({ type: "usage", usage: { inputTokens: 10, outputTokens: 5 } });
     expect(events[events.length - 1].type).toBe("run-completed");
   });
+
+  it("preserves Azure api-key auth and appends api-version after the resource path", async () => {
+    mockFetch.mockResolvedValue(openaiSseResponse());
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+    await collect(
+      runtime.run(
+        makeRequest({
+          baseUrl:
+            "https://resource.openai.azure.com/openai/deployments/prod%20deployment?api-version=2024-10-21",
+          headers: { "api-key": "azure-secret" },
+        }),
+      ),
+    );
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toBe(
+      "https://resource.openai.azure.com/openai/deployments/prod%20deployment/chat/completions?api-version=2024-10-21",
+    );
+    expect((init as RequestInit).headers).toMatchObject({ "api-key": "azure-secret" });
+    expect((init as RequestInit).headers).not.toHaveProperty("authorization");
+  });
+
+  it("sends the selected identity temperature", async () => {
+    mockFetch.mockResolvedValue(openaiSseResponse());
+    const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+    await collect(runtime.run(makeRequest({ temperature: 0.35 })));
+
+    expect(JSON.parse(String((mockFetch.mock.calls[0][1] as RequestInit).body))).toMatchObject({
+      temperature: 0.35,
+    });
+  });
+
+  it.each(["think", "thinking"])(
+    "extracts <%s> text as reasoning across stream chunks",
+    async (tag) => {
+      mockFetch.mockResolvedValue(taggedReasoningResponse(tag));
+      const runtime = new AISdkRuntime((req) => getLanguageModel(req));
+
+      const events = await collect(runtime.run(makeRequest({ modelId: "reasoning-model" })));
+
+      expect(
+        events
+          .filter((event) => event.type === "thinking-delta")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe("hidden");
+      expect(
+        events
+          .filter((event) => event.type === "text-delta")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe("visible");
+    },
+  );
 
   it("normalizes an HTTP 401 into run-failed auth", async () => {
     mockFetch.mockResolvedValue(

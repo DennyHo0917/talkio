@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState, memo } from "react";
+import DOMPurify from "dompurify";
 
 let mermaidCounter = 0;
 let mermaidInstance: any = null;
+
+/** Keep diagram rendering untouched, but neutralize script execution in the
+ *  rendered SVG (mermaid "loose" mode does not sanitize HTML the model put
+ *  into the chart). DOMPurify strips <script>, on* handlers and javascript:
+ *  URLs from the rendered markup while preserving all visual SVG structure. */
+function sanitizeSvg(svg: string): string {
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  });
+}
 
 async function getMermaid() {
   if (mermaidInstance) return mermaidInstance;
@@ -33,7 +44,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({ chart }: MermaidR
         const m = await getMermaid();
         const { svg: rendered } = await m.render(idRef.current, chart.trim());
         if (!cancelled) {
-          setSvg(rendered);
+          setSvg(sanitizeSvg(rendered));
           setError("");
         }
       } catch (err: any) {
@@ -51,7 +62,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({ chart }: MermaidR
 
   if (error) {
     return (
-      <div className="my-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-600">
+      <div className="my-2 rounded-lg border border-red-200 bg-red-50 p-3 text-red-600 text-xs">
         <p className="mb-1 font-medium">Mermaid Error</p>
         <pre className="mt-1 overflow-x-auto rounded bg-red-100 p-2 text-[10px]">{chart}</pre>
       </div>
@@ -60,7 +71,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({ chart }: MermaidR
 
   if (!svg) {
     return (
-      <div className="my-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-xs text-gray-400">
+      <div className="my-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-gray-400 text-xs">
         Rendering diagram...
       </div>
     );
@@ -70,6 +81,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({ chart }: MermaidR
     <div
       ref={containerRef}
       className="my-2 overflow-x-auto rounded-lg border border-gray-200 bg-white p-3"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: SVG is sanitized with DOMPurify before rendering.
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

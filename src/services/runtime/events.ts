@@ -1,20 +1,8 @@
 /**
- * GenerationEvent — the stable boundary between runtimes (model providers,
- * coding agents, remote agents) and the UI / persistence / approval layers.
- *
- * P1: event types are defined and the existing provider adapters are bridged
- * to this shape; UI consumers migrate incrementally in later phases.
+ * GenerationEvent — the stable boundary between runtimes and Talkio's UI and
+ * persistence layers.
  */
 import type { TokenUsage } from "../../types";
-
-/** User approval request surfaced during a run — approval stays Talkio-controlled. */
-export interface ApprovalRequest {
-  id: string;
-  toolCallId?: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  reason: string;
-}
 
 /** Reference to a shared artifact produced during a run. */
 export interface ArtifactRef {
@@ -38,7 +26,6 @@ export type GenerationEvent =
   | { type: "image-generated"; url: string }
   | { type: "tool-call-started"; callId: string; name: string }
   | { type: "tool-call-arguments-delta"; callId: string; delta: string }
-  | { type: "approval-required"; approval: ApprovalRequest }
   | { type: "tool-result"; callId: string; result: unknown }
   | { type: "artifact-updated"; artifact: ArtifactRef }
   | { type: "usage"; usage: TokenUsage }

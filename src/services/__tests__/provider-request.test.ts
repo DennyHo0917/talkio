@@ -44,6 +44,15 @@ describe("provider request configuration", () => {
     );
   });
 
+  it("preserves existing query parameters and hash fragments", () => {
+    const provider = azureProvider({
+      baseUrl: "https://resource.openai.azure.com/openai?tenant=talkio#models",
+    });
+    expect(resolveProviderResourceUrl(provider, "/models")).toBe(
+      "https://resource.openai.azure.com/openai/models?tenant=talkio&api-version=2024-10-21#models",
+    );
+  });
+
   it("adds a conversation session header for OpenCode endpoints", () => {
     const provider = azureProvider({
       type: "openai",

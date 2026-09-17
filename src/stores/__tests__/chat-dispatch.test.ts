@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
 // Node has no localStorage — kv-store-backed stores (identity-store etc.)
 // touch it at module load time, so the stub must exist before imports run.
-const mockStorage = vi.hoisted(() => {
+const _mockStorage = vi.hoisted(() => {
   const map = new Map<string, string>();
   const storage = {
     getItem: (k: string) => map.get(k) ?? null,

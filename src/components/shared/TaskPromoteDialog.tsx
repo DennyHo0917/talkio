@@ -84,7 +84,7 @@ export function TaskPromoteDialog({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !saving) void handleConfirm();
           }}
-          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary h-10 w-full rounded-md border px-3 text-sm outline-none"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-foreground text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
         />
         <textarea
           value={description}
@@ -92,7 +92,7 @@ export function TaskPromoteDialog({
           rows={3}
           placeholder={t("chat.taskDescriptionPlaceholder")}
           onChange={(event) => setDescription(event.target.value)}
-          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:border-primary w-full resize-none rounded-md border px-3 py-2 text-sm leading-relaxed outline-none"
+          className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus:border-primary"
         />
         <div className="max-h-56 space-y-0.5 overflow-y-auto">
           {participants.map((participant) => {
@@ -110,23 +110,23 @@ export function TaskPromoteDialog({
                 className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left active:opacity-60 ${selected ? "bg-primary/10" : ""}`}
               >
                 <div
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg font-semibold text-white text-xs"
                   style={{ backgroundColor: avatarColor }}
                 >
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="text-foreground block truncate text-[14px] font-medium">
+                  <span className="block truncate font-medium text-[14px] text-foreground">
                     {parts.modelName}
                     {parts.suffix && <span className="text-muted-foreground"> {parts.suffix}</span>}
                   </span>
                   {secondLine && (
-                    <span className="text-muted-foreground block truncate text-[12px]">
+                    <span className="block truncate text-[12px] text-muted-foreground">
                       {secondLine}
                     </span>
                   )}
                 </div>
-                {selected && <span className="text-primary text-xs font-semibold">✓</span>}
+                {selected && <span className="font-semibold text-primary text-xs">✓</span>}
               </button>
             );
           })}

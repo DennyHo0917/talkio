@@ -39,12 +39,12 @@ export const HtmlPreview = memo(function HtmlPreview({
   return (
     <>
       <div
-        className="mt-1 w-full max-w-full min-w-0 overflow-hidden rounded-xl"
+        className="mt-1 w-full min-w-0 max-w-full overflow-hidden rounded-xl"
         style={{ border: "0.5px solid var(--border)", backgroundColor: "var(--card)" }}
       >
         {/* Tab bar — 1:1 RN */}
         <div
-          className="flex w-full max-w-full min-w-0"
+          className="flex w-full min-w-0 max-w-full"
           style={{ borderBottom: "0.5px solid var(--border)" }}
         >
           <button
@@ -62,7 +62,7 @@ export const HtmlPreview = memo(function HtmlPreview({
               color={activeTab === "preview" ? "var(--primary)" : "var(--muted-foreground)"}
             />
             <span
-              className="text-xs font-bold"
+              className="font-bold text-xs"
               style={{
                 color: activeTab === "preview" ? "var(--primary)" : "var(--muted-foreground)",
               }}
@@ -86,7 +86,7 @@ export const HtmlPreview = memo(function HtmlPreview({
               color={activeTab === "code" ? "var(--primary)" : "var(--muted-foreground)"}
             />
             <span
-              className="text-xs font-bold"
+              className="font-bold text-xs"
               style={{ color: activeTab === "code" ? "var(--primary)" : "var(--muted-foreground)" }}
             >
               {language.toUpperCase()}
@@ -115,7 +115,10 @@ export const HtmlPreview = memo(function HtmlPreview({
           (previewEnabled ? (
             <iframe
               srcDoc={wrappedHtml}
-              sandbox="allow-scripts allow-same-origin"
+              // No allow-same-origin: the preview shows AI-generated HTML, so its
+              // scripts must never reach the parent document or Tauri internals.
+              // Scripts still run and can load external CDN resources.
+              sandbox="allow-scripts"
               className="w-full border-0 bg-white"
               style={{ height: 320 }}
               title="HTML Preview"
@@ -125,7 +128,7 @@ export const HtmlPreview = memo(function HtmlPreview({
               onClick={() => setPreviewEnabled(true)}
               className="flex w-full flex-col items-center justify-center px-4 py-6 active:opacity-70"
             >
-              <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+              <span className="font-semibold text-sm" style={{ color: "var(--foreground)" }}>
                 {t("htmlPreview.tapToRender", { defaultValue: "Tap to render preview" })}
               </span>
               <span className="mt-1 text-[11px]" style={{ color: "var(--muted-foreground)" }}>
@@ -137,7 +140,7 @@ export const HtmlPreview = memo(function HtmlPreview({
         {/* Code pane */}
         {activeTab === "code" && (
           <div
-            className="max-h-60 w-full max-w-full min-w-0 overflow-x-auto"
+            className="max-h-60 w-full min-w-0 max-w-full overflow-x-auto"
             style={{ scrollbarWidth: "thin" }}
           >
             <pre
@@ -163,7 +166,7 @@ export const HtmlPreview = memo(function HtmlPreview({
             className="flex items-center justify-between px-4 py-3"
             style={{ borderBottom: "0.5px solid var(--border)" }}
           >
-            <span className="text-base font-semibold" style={{ color: "var(--foreground)" }}>
+            <span className="font-semibold text-base" style={{ color: "var(--foreground)" }}>
               {t("htmlPreview.fullscreen", { defaultValue: "HTML Preview" })}
             </span>
             <button onClick={() => setFullscreen(false)} className="p-1 active:opacity-60">
@@ -172,7 +175,7 @@ export const HtmlPreview = memo(function HtmlPreview({
           </div>
           <iframe
             srcDoc={wrappedHtml}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts"
             className="w-full flex-1 border-0"
             style={{ backgroundColor: "var(--background)" }}
             title="HTML Preview Fullscreen"

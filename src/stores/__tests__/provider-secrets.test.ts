@@ -124,6 +124,38 @@ describe("provider secret persistence", () => {
     expect(localStorage.getItem("talkio:secret:p1")).toBeNull();
   });
 
+  it("migrates the legacy global image configuration into a provider model", async () => {
+    localStorage.setItem(
+      "talkio:settings",
+      JSON.stringify({
+        imageBaseUrl: "https://images.example.com/v1",
+        imageApiKey: "legacy-image-key",
+        imageModel: "flux-image",
+      }),
+    );
+    const store = await loadStore();
+    store.getState().loadFromStorage();
+
+    await vi.waitFor(() => expect(store.getState().providers).toHaveLength(1));
+    const migratedProvider = store.getState().providers[0];
+    const migratedModel = store.getState().models[0];
+    expect(migratedProvider.baseUrl).toBe("https://images.example.com/v1");
+    expect(migratedProvider.apiKey).toBe("legacy-image-key");
+    expect(migratedModel).toMatchObject({
+      providerId: migratedProvider.id,
+      modelId: "flux-image",
+      outputModalities: ["image"],
+      imageGenerationApi: "openai-compatible",
+      enabled: true,
+    });
+
+    const storedProvider = JSON.parse(localStorage.getItem("talkio:providers") ?? "[]")[0];
+    const storedSettings = JSON.parse(localStorage.getItem("talkio:settings") ?? "{}");
+    expect(storedProvider.apiKey).toBeUndefined();
+    expect(storedSettings.imageApiKey).toBe("");
+    expect(storedSettings.defaultImageModelId).toBe(migratedModel.id);
+  });
+
   it("deletes the secret when the provider is removed", async () => {
     const store = await loadStore();
     await store.getState().addProvider({

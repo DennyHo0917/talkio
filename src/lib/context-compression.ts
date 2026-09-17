@@ -7,19 +7,16 @@
  *
  * Inspired by LobeChat's compressContext / summaryHistory chains.
  */
-import { getAdapter } from "../services/provider-adapters";
+import { generateText } from "ai";
+import { encode } from "gpt-tokenizer";
+import { getLanguageModel } from "../services/runtime/ai-sdk/ai-sdk-runtime";
 import type { ApiFormat } from "../types";
 
 // ── Token estimation ──
 
 /** Rough token estimate: ~4 chars per token for English, ~2 for CJK */
 export function estimateTokens(text: string): number {
-  if (!text) return 0;
-  // Count CJK characters
-  const cjk = text.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
-  const cjkCount = cjk?.length ?? 0;
-  const nonCjkLength = text.length - cjkCount;
-  return Math.ceil(nonCjkLength / 4 + cjkCount / 2);
+  return text ? encode(text).length : 0;
 }
 
 /** Estimate total tokens for an array of API messages */
@@ -34,7 +31,7 @@ export function estimateMessagesTokens(
     } else if (Array.isArray(m.content)) {
       for (const part of m.content) {
         if (part.type === "text" && part.text) total += estimateTokens(part.text);
-        if (part.type === "image_url") total += 85; // image token estimate
+        if (part.type === "image") total += 85; // image token estimate
       }
     }
   }
@@ -141,20 +138,19 @@ async function callCompressionApi(
     })
     .join("\n\n");
 
-  const adapter = getAdapter(apiFormat);
-  return adapter.chat({
-    baseUrl,
-    headers,
-    modelId: model,
+  const llm = getLanguageModel({ apiFormat, baseUrl, headers, modelId: model });
+  const { text } = await generateText({
+    model: llm,
+    system: COMPRESS_SYSTEM_PROMPT,
     messages: [
-      { role: "system", content: COMPRESS_SYSTEM_PROMPT },
       { role: "user", content: compressText },
       { role: "user", content: COMPRESS_USER_PROMPT },
     ],
-    maxTokens: 1000,
+    maxOutputTokens: 1000,
     temperature: 0.2,
-    signal,
+    abortSignal: signal,
   });
+  return text;
 }
 
 /**

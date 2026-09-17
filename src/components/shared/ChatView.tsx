@@ -13,11 +13,13 @@ import { MessageStatus } from "../../types";
 import { TaskPromoteDialog } from "./TaskPromoteDialog";
 import { TaskPanel } from "./TaskPanel";
 import { promoteMessageToTask } from "../../stores/chat-store-actions";
-import { useConfirm } from "./ConfirmDialogProvider";
+import { appAlert, useConfirm } from "./ConfirmDialogProvider";
 import { useStickToBottom } from "use-stick-to-bottom";
 import { MessageRow } from "./MessageRow";
 import { useChatDragDrop } from "./useChatDragDrop";
 import { useFileWriteDetection } from "./useFileWriteDetection";
+import { useProviderStore } from "../../stores/provider-store";
+import { isStandaloneImageModel } from "../../services/image-model";
 
 export interface ChatViewHandle {
   scrollToBottom: () => void;
@@ -48,7 +50,7 @@ export function ChatView({
   participants = [],
   keyboardInset = 0,
 }: ChatViewProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { confirm } = useConfirm();
   const activeBranchId = useChatStore((s: ChatState) => s.activeBranchId);
   const messages = useMessages(conversationId, activeBranchId);
@@ -57,6 +59,7 @@ export function ChatView({
   const isGenerating = useChatStore((s: ChatState) => s.isGenerating);
   const streamingMessages = useChatStore((s: ChatState) => s.streamingMessages);
   const sendMessage = useChatStore((s: ChatState) => s.sendMessage);
+  const generateImage = useChatStore((s: ChatState) => s.generateImage);
   const stopGeneration = useChatStore((s: ChatState) => s.stopGeneration);
   const skipCurrentParticipant = useChatStore((s: ChatState) => s.skipCurrentParticipant);
   const canSkipCurrent = useChatStore((s: ChatState) => s.canSkipCurrent);
@@ -72,6 +75,13 @@ export function ChatView({
   const switchBranch = useChatStore((s: ChatState) => s.switchBranch);
   const deleteMessageById = useChatStore((s: ChatState) => s.deleteMessageById);
   const editMessage = useChatStore((s: ChatState) => s.editMessage);
+  const models = useProviderStore((s) => s.models);
+  const activeModel = useMemo(() => {
+    if (isGroup || participants.length !== 1) return undefined;
+    return models.find((candidate) => candidate.id === participants[0].modelId);
+  }, [isGroup, models, participants]);
+  const usesImageApi = !isGroup && isStandaloneImageModel(activeModel);
+  const imageOnly = usesImageApi;
 
   const { scrollRef, contentRef, scrollToBottom, isAtBottom } = useStickToBottom({
     initial: "instant",
@@ -167,9 +177,15 @@ export function ChatView({
       // throughout the entire send → stream cycle, preventing race conditions
       // where isAtBottom becomes false between message insert and DOM render.
       scrollToBottom({ animation: "instant", ignoreEscapes: true, duration: 500 });
+      if (usesImageApi && activeModel) {
+        void generateImage(text, activeModel.id).catch((error) => {
+          void appAlert(error instanceof Error ? error.message : String(error));
+        });
+        return;
+      }
       sendMessage(text, images, { mentionedParticipantIds });
     },
-    [sendMessage, scrollToBottom],
+    [activeModel, generateImage, sendMessage, scrollToBottom, usesImageApi],
   );
 
   const handleCopy = useCallback((content: string) => {
@@ -198,7 +214,8 @@ export function ChatView({
   const activeTaskCount = useMemo(
     () =>
       tasks.filter(
-        (task) => task.status === "running" || task.status === "pending" || task.status === "paused",
+        (task) =>
+          task.status === "running" || task.status === "pending" || task.status === "paused",
       ).length,
     [tasks],
   );
@@ -324,13 +341,13 @@ export function ChatView({
     >
       <div className="flex items-center gap-2">
         <GitBranch size={14} color="var(--primary)" />
-        <span className="text-xs font-medium" style={{ color: "var(--primary)" }}>
+        <span className="font-medium text-xs" style={{ color: "var(--primary)" }}>
           {t("chat.branch")}
         </span>
       </div>
       <button
         onClick={() => switchBranch(null)}
-        className="rounded-md px-2.5 py-1 text-xs font-medium active:opacity-70"
+        className="rounded-md px-2.5 py-1 font-medium text-xs active:opacity-70"
         style={{
           backgroundColor: "color-mix(in srgb, var(--primary) 15%, transparent)",
           color: "var(--primary)",
@@ -347,13 +364,14 @@ export function ChatView({
         {branchBanner}
         <div className="flex flex-1 flex-col items-center justify-center px-6">
           <IoChatbubbleOutline size={48} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
-          <p className="text-muted-foreground mt-4 text-lg font-medium">
+          <p className="mt-4 font-medium text-lg text-muted-foreground">
             {t("chats.startConversation")}
           </p>
-          <p className="text-muted-foreground/60 mt-1 text-center text-sm">{t("chat.message")}</p>
+          <p className="mt-1 text-center text-muted-foreground/60 text-sm">{t("chat.message")}</p>
         </div>
         <ChatInput
           onSend={handleSend}
+          imageOnly={imageOnly}
           isGenerating={isGenerating}
           onStop={stopGeneration}
           onSkip={skipCurrentParticipant}
@@ -396,7 +414,7 @@ export function ChatView({
         >
           <div className="flex flex-col items-center gap-1.5">
             <Paperclip size={28} color="var(--primary)" />
-            <span className="text-sm font-medium" style={{ color: "var(--primary)" }}>
+            <span className="font-medium text-sm" style={{ color: "var(--primary)" }}>
               {t("chat.dropFiles")}
             </span>
           </div>
@@ -406,32 +424,38 @@ export function ChatView({
 
       {/* Messages */}
       <div className="relative min-h-0 flex-1">
-      <div ref={scrollRef} className="h-full overflow-y-auto pt-3 pb-2">
-        <div ref={contentRef}>
-          {displayMessages.map((msg) => (
-            <MessageRow
-              key={msg.id}
-              message={msg}
-              participants={participants}
-              onCopy={handleCopy}
-              onRegenerate={msg.role === "assistant" ? handleRegenerate : undefined}
-              onBranch={msg.role === "assistant" ? handleBranch : undefined}
-              onDelete={handleDelete}
-              onEdit={msg.role === "user" ? handleEdit : undefined}
-              isGenerating={isGenerating}
-              writtenFiles={writtenFilesMap[msg.id]}
-              pendingFileBlocks={!isMobile ? pendingFileBlocksMap[msg.id] : undefined}
-              pendingFileStatuses={!isMobile ? pendingFileStatusMap[msg.id] : undefined}
-              onApplyFileBlocks={!isMobile ? handleApplyFileBlocks : undefined}
-              onPromoteToTask={msg.role === "assistant" && !isGenerating ? handlePromoteToTask : undefined}
-              tasksByRequestId={tasksByRequestId}
-              onPauseTask={handlePauseTask}
-              onResumeTask={handleResumeTask}
-              onRetryTask={handleResumeTask}
-            />
-          ))}
+        <div ref={scrollRef} className="h-full overflow-y-auto pt-3 pb-2">
+          <div ref={contentRef}>
+            {displayMessages.map((msg) => (
+              <MessageRow
+                key={msg.id}
+                message={msg}
+                participants={participants}
+                onCopy={handleCopy}
+                onRegenerate={
+                  msg.role === "assistant" && !usesImageApi ? handleRegenerate : undefined
+                }
+                onBranch={msg.role === "assistant" && !usesImageApi ? handleBranch : undefined}
+                onDelete={handleDelete}
+                onEdit={msg.role === "user" && !usesImageApi ? handleEdit : undefined}
+                isGenerating={isGenerating}
+                writtenFiles={writtenFilesMap[msg.id]}
+                pendingFileBlocks={!isMobile ? pendingFileBlocksMap[msg.id] : undefined}
+                pendingFileStatuses={!isMobile ? pendingFileStatusMap[msg.id] : undefined}
+                onApplyFileBlocks={!isMobile ? handleApplyFileBlocks : undefined}
+                onPromoteToTask={
+                  msg.role === "assistant" && !isGenerating && !usesImageApi
+                    ? handlePromoteToTask
+                    : undefined
+                }
+                tasksByRequestId={tasksByRequestId}
+                onPauseTask={handlePauseTask}
+                onResumeTask={handleResumeTask}
+                onRetryTask={handleResumeTask}
+              />
+            ))}
+          </div>
         </div>
-      </div>
         {/* Floating tasks entry — visible whenever the conversation has tasks */}
         {(tasks.length > 0 || isGroup) && (
           <button
@@ -448,7 +472,7 @@ export function ChatView({
             <ClipboardList size={14} color="var(--muted-foreground)" />
             {activeTaskCount > 0 && (
               <span
-                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-bold text-[10px] text-white"
                 style={{ backgroundColor: "var(--primary)" }}
               >
                 {activeTaskCount}
@@ -461,6 +485,7 @@ export function ChatView({
       {/* Input */}
       <ChatInput
         onSend={handleSend}
+        imageOnly={imageOnly}
         isGenerating={isGenerating}
         onStop={stopGeneration}
         onSkip={skipCurrentParticipant}

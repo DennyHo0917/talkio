@@ -4,7 +4,6 @@
  */
 import { create } from "zustand";
 import { kvStore } from "../storage/kv-store";
-import type { ToolApprovalMode } from "../services/tool-approval";
 import { isAndroid } from "../lib/platform";
 
 export interface AppSettings {
@@ -21,14 +20,14 @@ export interface AppSettings {
   contextCompressionThreshold: number;
   /** Enter key behavior on desktop: true = Enter sends (default), false = Enter inserts newline */
   enterToSend: boolean;
-  /** Tool execution gate: "auto" runs tools without asking, "ask" requires user approval */
-  toolApprovalMode: ToolApprovalMode;
   /** Desktop only: closing the main window hides it to the system tray instead of quitting */
   closeToTray: boolean;
   /** OpenAI-compatible image endpoint backing the generate_image tool */
   imageBaseUrl: string;
   imageApiKey: string;
   imageModel: string;
+  /** Internal Model.id used when generate_image does not request a specific model. */
+  defaultImageModelId: string;
 }
 
 interface SettingsState {
@@ -48,11 +47,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   contextCompressionEnabled: false,
   contextCompressionThreshold: 16000,
   enterToSend: true,
-  toolApprovalMode: "auto",
   closeToTray: false,
   imageBaseUrl: "https://api.openai.com/v1",
   imageApiKey: "",
   imageModel: "gpt-image-1",
+  defaultImageModelId: "",
 };
 
 const SETTINGS_KEY = "settings";
@@ -72,6 +71,7 @@ function syncAndroidSystemBars(isDark: boolean) {
 }
 
 function applyTheme(theme: AppSettings["theme"]) {
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
   if (theme === "dark") {

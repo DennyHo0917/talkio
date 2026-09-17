@@ -1,11 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Pause, Play, RotateCcw, X, Check } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import type { ConversationParticipant, Task } from "../../types";
 import { getParticipantLabel } from "../../stores/chat-message-builder";
 
@@ -60,7 +55,7 @@ export function TaskPanel({
           <DialogTitle>
             <span className="flex items-center gap-2">
               📋 {t("chat.tasks")}
-              <span className="text-muted-foreground text-xs font-normal">
+              <span className="font-normal text-muted-foreground text-xs">
                 {tasks.length > 0 ? tasks.length : ""}
               </span>
             </span>
@@ -68,7 +63,7 @@ export function TaskPanel({
         </DialogHeader>
         <div className="max-h-[50vh] space-y-2 overflow-y-auto">
           {sorted.length === 0 && (
-            <p className="text-muted-foreground py-8 text-center text-sm">{t("chat.taskEmpty")}</p>
+            <p className="py-8 text-center text-muted-foreground text-sm">{t("chat.taskEmpty")}</p>
           )}
           {sorted.map((task) => {
             const assignee = task.assigneeParticipantId
@@ -87,16 +82,14 @@ export function TaskPanel({
               >
                 <div className="flex items-start gap-2">
                   <button
-                    className="text-foreground min-w-0 flex-1 text-left text-[13px] font-medium break-words hover:opacity-70"
-                    onClick={() =>
-                      task.requestMessageId && onJumpToRequest(task.requestMessageId)
-                    }
+                    className="min-w-0 flex-1 break-words text-left font-medium text-[13px] text-foreground hover:opacity-70"
+                    onClick={() => task.requestMessageId && onJumpToRequest(task.requestMessageId)}
                     title={t("chat.jumpToRequest", { defaultValue: "Locate in discussion" })}
                   >
                     {task.title}
                   </button>
                   <span
-                    className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                    className="flex-shrink-0 rounded-full px-2 py-0.5 font-semibold text-[10px]"
                     style={{ backgroundColor: colors.bg, color: colors.fg }}
                   >
                     {statusLabel}
@@ -104,7 +97,7 @@ export function TaskPanel({
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   {assignee && (
-                    <span className="text-muted-foreground truncate text-[11px]">
+                    <span className="truncate text-[11px] text-muted-foreground">
                       {getParticipantLabel(assignee, participants)}
                     </span>
                   )}
@@ -112,8 +105,11 @@ export function TaskPanel({
                   {task.status === "running" && (
                     <button
                       onClick={() => onPause(task.id)}
-                      className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
-                      style={{ backgroundColor: "var(--secondary)", color: "var(--muted-foreground)" }}
+                      className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
+                      style={{
+                        backgroundColor: "var(--secondary)",
+                        color: "var(--muted-foreground)",
+                      }}
                     >
                       <Pause size={11} />
                       {t("chat.taskPause")}
@@ -122,8 +118,11 @@ export function TaskPanel({
                   {task.status === "paused" && (
                     <button
                       onClick={() => onResume(task.id)}
-                      className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
-                      style={{ backgroundColor: STATUS_COLORS.done.bg, color: STATUS_COLORS.done.fg }}
+                      className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
+                      style={{
+                        backgroundColor: STATUS_COLORS.done.bg,
+                        color: STATUS_COLORS.done.fg,
+                      }}
                     >
                       <Play size={11} />
                       {t("chat.taskResume")}
@@ -132,7 +131,7 @@ export function TaskPanel({
                   {task.status === "failed" && (
                     <button
                       onClick={() => onRetry(task.id)}
-                      className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
+                      className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
                       style={{
                         backgroundColor: STATUS_COLORS.failed.bg,
                         color: STATUS_COLORS.failed.fg,
@@ -145,8 +144,11 @@ export function TaskPanel({
                   {task.status === "done" && resultMessageId && (
                     <button
                       onClick={() => onJumpToRequest(resultMessageId)}
-                      className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium active:opacity-60"
-                      style={{ backgroundColor: STATUS_COLORS.done.bg, color: STATUS_COLORS.done.fg }}
+                      className="flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[11px] active:opacity-60"
+                      style={{
+                        backgroundColor: STATUS_COLORS.done.bg,
+                        color: STATUS_COLORS.done.fg,
+                      }}
                     >
                       <Check size={11} />
                       {t("chat.taskDoneBadge")}
@@ -159,7 +161,7 @@ export function TaskPanel({
         </div>
         <button
           onClick={() => onOpenChange(false)}
-          className="text-muted-foreground hover:bg-muted/50 mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-medium active:opacity-60"
+          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 font-medium text-[13px] text-muted-foreground hover:bg-muted/50 active:opacity-60"
         >
           <X size={14} />
           {t("common.close", { defaultValue: "Close" })}

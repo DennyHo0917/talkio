@@ -51,6 +51,8 @@ function makeModel(overrides: Partial<Model> = {}): Model {
     displayName: "GPT-4o",
     avatar: null,
     capabilities: { vision: false, toolCall: false, reasoning: false, streaming: true },
+    inputModalities: ["text"],
+    outputModalities: ["text"],
     capabilitiesVerified: false,
     maxContextLength: 128000,
     enabled: true,
@@ -66,9 +68,7 @@ describe("provider disable / model selection", () => {
   it("getEnabledModels hides models from disabled and orphan providers", async () => {
     const store = await loadStore();
     await store.getState().addProvider(makeProvider({ id: "p1" }));
-    await store
-      .getState()
-      .addProvider(makeProvider({ id: "p2", name: "Off", enabled: false }));
+    await store.getState().addProvider(makeProvider({ id: "p2", name: "Off", enabled: false }));
     store.getState().addModel(makeModel({ id: "m1", providerId: "p1" }));
     store
       .getState()
@@ -80,7 +80,51 @@ describe("provider disable / model selection", () => {
       .addModel(
         makeModel({ id: "m3", providerId: "ghost", modelId: "ghost-model", displayName: "Ghost" }),
       );
+    store.getState().addModel(
+      makeModel({
+        id: "m4",
+        providerId: "p1",
+        modelId: "image-model",
+        displayName: "Image Model",
+        outputModalities: ["image"],
+      }),
+    );
 
-    expect(store.getState().getEnabledModels().map((m) => m.id)).toEqual(["m1"]);
+    expect(
+      store
+        .getState()
+        .getEnabledModels()
+        .map((m) => m.id),
+    ).toEqual(["m1"]);
+    expect(
+      store
+        .getState()
+        .getEnabledConversationModels()
+        .map((model) => model.id),
+    ).toEqual(["m1", "m4"]);
+  });
+
+  it("keeps field-level probe overrides when catalog metadata is reapplied", async () => {
+    localStorage.setItem(
+      "talkio:providers",
+      JSON.stringify([makeProvider({ profileId: "openai" })]),
+    );
+    localStorage.setItem(
+      "talkio:models",
+      JSON.stringify([
+        makeModel({
+          capabilities: { vision: false, toolCall: false, reasoning: false, streaming: true },
+          probedCapabilities: { toolCall: false },
+        }),
+      ]),
+    );
+
+    const store = await loadStore();
+    const loaded = store.getState().getModelById("m1");
+
+    expect(loaded?.metadataSource).toBe("models.dev");
+    expect(loaded?.capabilities.vision).toBe(true);
+    expect(loaded?.capabilities.toolCall).toBe(false);
+    expect(loaded?.probedCapabilities).toEqual({ toolCall: false });
   });
 });

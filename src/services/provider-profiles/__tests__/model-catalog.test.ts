@@ -16,12 +16,12 @@ vi.hoisted(() => {
   (globalThis as unknown as { localStorage: typeof storage }).localStorage = storage;
 });
 import {
-  MODEL_CATALOG,
   resolveModelDescriptor,
   getAllModelDescriptors,
   setModelOverride,
   resetModelOverrides,
 } from "../model-catalog";
+import { getSupportedReasoningEfforts, type Model } from "../../../types";
 
 describe("model catalog", () => {
   beforeEach(() => {
@@ -33,6 +33,33 @@ describe("model catalog", () => {
     expect(gpt4o?.displayName).toBe("GPT-4o");
     expect(gpt4o?.contextWindow).toBe(128000);
     expect(gpt4o?.capabilities?.tools).toBe(true);
+    expect(gpt4o?.metadataSource).toBe("models.dev");
+    expect(gpt4o?.metadataProviderId).toBe("openai");
+  });
+
+  it("maps profile aliases to the models.dev provider", () => {
+    const gemini = resolveModelDescriptor("gemini", "gemini-2.5-pro");
+    expect(gemini?.metadataProviderId).toBe("google");
+    expect(gemini?.contextWindow).toBe(1048576);
+    expect(gemini?.inputModalities).toContain("image");
+  });
+
+  it("normalizes a dated gateway suffix only when the model family identifies a source", () => {
+    const deepseek = resolveModelDescriptor("custom", "deepseek-v4-flash:0731");
+    expect(deepseek?.metadataMatch).toBe("normalized");
+    expect(deepseek?.metadataProviderId).toBe("deepseek");
+    expect(deepseek?.capabilities?.reasoning).toBe(true);
+    expect(deepseek?.reasoningOptions).toContainEqual({
+      type: "effort",
+      values: ["low", "high", "max"],
+    });
+  });
+
+  it("normalizes known gateway option suffixes without fuzzy name matching", () => {
+    const gemini = resolveModelDescriptor("custom", "gemini-3.6-flash-high");
+    expect(gemini?.metadataProviderId).toBe("google");
+    expect(gemini?.metadataMatch).toBe("normalized");
+    expect(resolveModelDescriptor("custom", "totally-unknown-high")).toBeUndefined();
   });
 
   it("returns undefined for unknown models without overrides", () => {
@@ -66,12 +93,13 @@ describe("model catalog", () => {
   });
 
   it("getAllModelDescriptors applies overrides to the full catalog", () => {
+    const builtInCount = getAllModelDescriptors("openai").length;
     setModelOverride("openai", "gpt-4o", { contextWindow: 1234 });
     setModelOverride("openai", "custom-model", { displayName: "Custom" });
     const all = getAllModelDescriptors("openai");
     expect(all.find((m) => m.modelId === "gpt-4o")?.contextWindow).toBe(1234);
     expect(all.find((m) => m.modelId === "custom-model")?.displayName).toBe("Custom");
-    expect(all.length).toBe(MODEL_CATALOG.length + 1);
+    expect(all.length).toBe(builtInCount + 1);
   });
 
   it("isolates overrides for the same model id across providers", () => {
@@ -82,5 +110,21 @@ describe("model catalog", () => {
     expect(resolveModelDescriptor("openrouter", "shared-model")?.displayName).toBe(
       "OpenRouter Shared",
     );
+  });
+
+  it("only exposes reasoning efforts declared by model metadata", () => {
+    const model = {
+      capabilities: { reasoning: true },
+      reasoningOptions: [{ type: "effort", values: ["low", "high", "max"] }],
+    } as Model;
+    expect(getSupportedReasoningEfforts(model)).toEqual([undefined, "low", "high", "max"]);
+  });
+
+  it("does not invent effort levels for toggle or budget reasoning", () => {
+    const model = {
+      capabilities: { reasoning: true },
+      reasoningOptions: [{ type: "budget_tokens", min: 128, max: 32768 }],
+    } as Model;
+    expect(getSupportedReasoningEfforts(model)).toEqual([undefined]);
   });
 });

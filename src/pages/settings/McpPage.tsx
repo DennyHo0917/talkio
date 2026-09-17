@@ -13,6 +13,13 @@ import { refreshMcpConnections } from "../../services/mcp";
 import { useBuiltInToolsStore } from "../../stores/built-in-tools-store";
 import { McpServerCard } from "./McpServerCard";
 import { McpServerForm } from "./McpServerForm";
+import { z } from "zod";
+
+const mcpImportSchema = z.union([
+  z.object({ mcpServers: z.record(z.string(), z.record(z.string(), z.unknown())) }).passthrough(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
 
 // ── MCP Tools Page (1:1 RN native style) ──
 
@@ -57,15 +64,19 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
   const [isImporting, setIsImporting] = useState(false);
 
   const handleImportJson = useCallback(async () => {
-    let parsed: any;
+    let parsed: z.infer<typeof mcpImportSchema>;
     try {
-      parsed = JSON.parse(importJson.trim());
+      parsed = mcpImportSchema.parse(JSON.parse(importJson.trim()));
     } catch {
       appAlert(`${t("common.error")}: ${t("personas.importInvalidJson")}`);
       return;
     }
 
     const stdioOk = isStdioAvailable();
+    const importedServers =
+      !Array.isArray(parsed) && "mcpServers" in parsed && parsed.mcpServers
+        ? parsed.mcpServers
+        : undefined;
     let toImport: Array<{
       name: string;
       type?: "http" | "stdio";
@@ -76,8 +87,8 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
       env?: Record<string, string>;
     }> = [];
 
-    if (parsed?.mcpServers && typeof parsed.mcpServers === "object") {
-      for (const [key, val] of Object.entries(parsed.mcpServers)) {
+    if (importedServers) {
+      for (const [key, val] of Object.entries(importedServers)) {
         const v = val as Record<string, unknown>;
         const url = String((v.url ?? v.endpoint ?? "") as string);
         const hasCommand = !!v.command;
@@ -114,7 +125,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
       }
 
       if (toImport.length === 0) {
-        const isCommandConfig = Object.values(parsed.mcpServers).some(
+        const isCommandConfig = Object.values(importedServers).some(
           (v: any) => v?.command || v?.args,
         );
         appAlert(
@@ -207,7 +218,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
                 }}
               >
                 <div className="px-5 py-1.5" style={{ backgroundColor: "var(--secondary)" }}>
-                  <p className="text-muted-foreground text-[13px] font-semibold">
+                  <p className="font-semibold text-[13px] text-muted-foreground">
                     {t("personas.builtInTools")}
                   </p>
                 </div>
@@ -225,8 +236,8 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
                       }}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-foreground text-[13px] font-medium">{tool.name}</p>
-                        <p className="text-muted-foreground text-[11px] leading-relaxed break-words">
+                        <p className="font-medium text-[13px] text-foreground">{tool.name}</p>
+                        <p className="break-words text-[11px] text-muted-foreground leading-relaxed">
                           {tool.description}
                         </p>
                       </div>
@@ -299,7 +310,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground px-4 pt-4 text-[13px]">
+                <p className="px-4 pt-4 text-[13px] text-muted-foreground">
                   {t("personas.noCustomTools")}
                 </p>
               );
@@ -315,14 +326,14 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
               className="flex-1 rounded-xl py-3 active:opacity-70"
               style={{ backgroundColor: "rgba(124, 58, 237, 0.08)", color: "var(--primary)" }}
             >
-              <span className="text-[14px] font-semibold">{t("personas.importJson")}</span>
+              <span className="font-semibold text-[14px]">{t("personas.importJson")}</span>
             </button>
             <button
               onClick={() => pushServerForm()}
               className="flex-1 rounded-xl py-3 text-white active:opacity-70"
               style={{ backgroundColor: "var(--primary)" }}
             >
-              <span className="text-[14px] font-semibold">{t("personas.addTool")}</span>
+              <span className="font-semibold text-[14px]">{t("personas.addTool")}</span>
             </button>
           </div>
         </div>
@@ -346,7 +357,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
               className="flex items-center justify-between px-4 py-3"
               style={{ borderBottom: "0.5px solid var(--border)" }}
             >
-              <span className="text-foreground text-[16px] font-semibold">
+              <span className="font-semibold text-[16px] text-foreground">
                 {t("personas.importJson")}
               </span>
               <button
@@ -359,11 +370,11 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
               </button>
             </div>
             <div className="px-4 pt-4 pb-5">
-              <p className="text-muted-foreground mb-2 text-[13px]">{t("personas.importHint")}</p>
+              <p className="mb-2 text-[13px] text-muted-foreground">{t("personas.importHint")}</p>
               <textarea
                 value={importJson}
                 onChange={(e) => setImportJson(e.target.value)}
-                className="text-foreground w-full resize-none rounded-xl px-3 py-2 font-mono text-[13px] outline-none"
+                className="w-full resize-none rounded-xl px-3 py-2 font-mono text-[13px] text-foreground outline-none"
                 style={{ backgroundColor: "var(--secondary)", minHeight: 180 }}
                 placeholder={
                   '{\n  "mcpServers": {\n    "weather": { "url": "https://..." },\n    "filesystem": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]\n    }\n  }\n}'
@@ -376,7 +387,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
                   className="flex-1 rounded-xl py-3 active:opacity-70 disabled:opacity-50"
                   style={{ backgroundColor: "var(--secondary)" }}
                 >
-                  <span className="text-foreground text-[14px] font-semibold">
+                  <span className="font-semibold text-[14px] text-foreground">
                     {t("common.cancel")}
                   </span>
                 </button>
@@ -386,7 +397,7 @@ export const McpPage = forwardRef<McpPageHandle, McpPageProps>(function McpPage(
                   className="flex-1 rounded-xl py-3 text-white active:opacity-70 disabled:opacity-50"
                   style={{ backgroundColor: "var(--primary)" }}
                 >
-                  <span className="text-[14px] font-semibold">{t("personas.import")}</span>
+                  <span className="font-semibold text-[14px]">{t("personas.import")}</span>
                 </button>
               </div>
             </div>
